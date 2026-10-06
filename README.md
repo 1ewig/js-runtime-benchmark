@@ -57,6 +57,7 @@ The database is migrated and pre-seeded with realistic social media data:
 | :--- | :--- | :--- |
 | `/` | `GET` | Service metadata & available route directory |
 | `/health` | `GET` | System health, DB ping latency, and memory telemetry |
+| `/api/auth/token` | `POST` | Generate HMAC-SHA256 Bearer authorization token |
 | `/api/feed/home?userId=<id>&cursor=<id>&limit=20` | `GET` | Personalized timeline of posts from followed accounts |
 | `/api/feed/explore?cursor=<id>&limit=20` | `GET` | Discovery feed of top-engagement posts |
 | `/api/users/:id` | `GET` | Profile metadata, follower/following counts, and 12-photo grid |
@@ -124,6 +125,6 @@ bunx insta compute metrics api
 # Deploy code changes to InstaCloud
 bunx insta deploy . --port 3000
 
-# Trigger realistic user simulation benchmark from loadgen microVM
-curl "https://<loadgen-url>/run?users=1000&duration=10&thinkTimeMs=200"
+# Trigger A+ production-grade user simulation (60s total: 15s ramp-up + 45s sustained peak + Auth)
+curl "https://<loadgen-url>/run?users=1000&duration=60&rampUpSec=15&thinkTimeMs=200&useAuth=true"
 ```

@@ -3,8 +3,9 @@
   "scripts": {
     "start": "bun run src/index.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint src scripts",
-    "lint:fix": "oxlint --fix src scripts",
+    "lint": "oxlint src scripts loadgen",
+    "lint:fix": "oxlint --fix src scripts loadgen",
+    "loadgen": "bun run loadgen/index.ts",
     "test:endpoints": "bun run scripts/test-endpoints.ts",
     "seed": "bun run scripts/seed.ts",
     "migrate": "bun run scripts/migrate.ts"

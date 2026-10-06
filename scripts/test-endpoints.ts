@@ -1,4 +1,6 @@
-const baseUrl = 'https://prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com'
+import { signAuthToken } from '../src/auth'
+
+const baseUrl = process.env.API_URL || 'https://prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com'
 
 async function testAll() {
   console.log(`🔎 Testing live Instagram API at: ${baseUrl}\n`)
@@ -6,8 +8,28 @@ async function testAll() {
   // 1. Health & DB ping
   console.log('1️⃣ GET /health')
   const hRes = await fetch(`${baseUrl}/health`)
-  const hJson: any = await hRes.json()
+  const hJson: any = await hRes.json().catch(() => ({}))
   console.log('Status:', hRes.status, hJson)
+
+  // 1b. Auth Token Issuance & Bearer Token Verification
+  console.log('\n🔑 POST /api/auth/token (Issue signed Bearer token for User 1)')
+  let token = signAuthToken(1)
+  try {
+    const authRes = await fetch(`${baseUrl}/api/auth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: 1 }),
+    })
+    if (authRes.ok) {
+      const authJson: any = await authRes.json()
+      token = authJson.token || token
+      console.log('Status:', authRes.status, authJson)
+    } else {
+      console.log(`Status: ${authRes.status} (Remote running prior build; using local signed token for Bearer tests)`)
+    }
+  } catch (err: any) {
+    console.log('Token endpoint error, using local token:', err.message)
+  }
 
   // 2. Home Feed (posts from accounts user 1 follows)
   console.log('\n2️⃣ GET /api/feed/home?userId=1&limit=3')
@@ -60,11 +82,14 @@ async function testAll() {
   const fJson: any = await fRes.json()
   console.log('Status:', fRes.status, fJson)
 
-  // 6. Create Instagram Photo Post
-  console.log('\n6️⃣ POST /api/posts')
+  // 6. Create Instagram Photo Post (Authenticated with Bearer token)
+  console.log('\n6️⃣ POST /api/posts (with Bearer Authorization header)')
   const pRes = await fetch(`${baseUrl}/api/posts`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({
       userId: 1,
       imageUrl: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800',
