@@ -57,6 +57,8 @@ The database is migrated and pre-seeded with realistic social media data:
 | :--- | :--- | :--- |
 | `/` | `GET` | Service metadata & available route directory |
 | `/health` | `GET` | System health, DB ping latency, and memory telemetry |
+| `/api/telemetry` | `GET` | Real-time CPU %, RAM, and event-loop lag sampler report |
+| `/api/telemetry/reset` | `POST` | Reset telemetry sample windows for fresh benchmark |
 | `/api/auth/token` | `POST` | Generate HMAC-SHA256 Bearer authorization token |
 | `/api/feed/home?userId=<id>&cursor=<id>&limit=20` | `GET` | Personalized timeline of posts from followed accounts |
 | `/api/feed/explore?cursor=<id>&limit=20` | `GET` | Discovery feed of top-engagement posts |

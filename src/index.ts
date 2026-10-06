@@ -4,6 +4,11 @@ import { authRoutes } from './routes/auth'
 import { feedRoutes } from './routes/feed'
 import { usersRoutes } from './routes/users'
 import { postsRoutes } from './routes/posts'
+import { telemetryRoutes } from './routes/telemetry'
+import { apiTelemetry } from './telemetry'
+
+// Start real-time CPU, Memory, and Event-Loop sampler
+apiTelemetry.start()
 
 const app = new Hono()
 
@@ -14,6 +19,8 @@ app.get('/', (c) => {
     runtime: 'Bun ' + Bun.version,
     endpoints: [
       'GET  /health',
+      'GET  /api/telemetry',
+      'POST /api/telemetry/reset',
       'POST /api/auth/token',
       'GET  /api/feed/home?userId=<id>&cursor=<id>&limit=20',
       'GET  /api/feed/explore?cursor=<id>&limit=20',
@@ -54,6 +61,7 @@ app.route('/api/auth', authRoutes)
 app.route('/api/feed', feedRoutes)
 app.route('/api/users', usersRoutes)
 app.route('/api/posts', postsRoutes)
+app.route('/api/telemetry', telemetryRoutes)
 
 const port = Number(process.env.PORT) || 3000
 

@@ -140,7 +140,8 @@ export function createMetricsCollector(duration: number, startTime: number) {
       useAuth: boolean
       totalDurationSec: number
     },
-    telemetry: TelemetryReport
+    telemetry: TelemetryReport,
+    apiServerTelemetry?: any
   ) {
     const rawStats = computePercentiles(rawLatencies)
     const coStats = computePercentiles(coCorrectedLatencies)
@@ -207,6 +208,7 @@ export function createMetricsCollector(duration: number, startTime: number) {
         networkErrors,
       },
       workloadBreakdown,
+      apiServerTelemetry: apiServerTelemetry || null,
       loadgenTelemetry: telemetry,
       rpsTimeline: rpsTimeline.slice(0, 30),
       timestamp: new Date().toISOString(),

@@ -91,6 +91,15 @@ async function handleRun(c: any) {
   }
 
   isRunning = true
+
+  // Reset API server telemetry to begin a clean measurement window
+  try {
+    await fetch(`${targetUrl}/api/telemetry/reset`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(3000),
+    }).catch(() => {})
+  } catch {}
+
   const startTime = performance.now()
   const stopTimestamp = Date.now() + duration * 1000
 
@@ -116,6 +125,18 @@ async function handleRun(c: any) {
 
   const totalDurationSec = (performance.now() - startTime) / 1000
   const telemetryReport = telemetry.stop()
+
+  // Retrieve API server CPU & Memory telemetry recorded during the benchmark
+  let apiServerTelemetry: any = null
+  try {
+    const apiTelRes = await fetch(`${targetUrl}/api/telemetry`, {
+      signal: AbortSignal.timeout(4000),
+    }).catch(() => null)
+    if (apiTelRes && apiTelRes.ok) {
+      apiServerTelemetry = await apiTelRes.json().catch(() => null)
+    }
+  } catch {}
+
   isRunning = false
 
   const report = collector.compileReport(
@@ -128,7 +149,8 @@ async function handleRun(c: any) {
       useAuth,
       totalDurationSec,
     },
-    telemetryReport
+    telemetryReport,
+    apiServerTelemetry
   )
 
   lastResult = report
