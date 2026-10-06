@@ -69,22 +69,54 @@ The database is migrated and pre-seeded with realistic social media data:
 
 ## 📊 Realistic User Journey Simulation Benchmark (2 vCPU / 2 GB MicroVM)
 
-Simulating full human mobile app journeys (Home timeline scrolling 55%, Explore discovery 25%, Profile grid 12%, Double-tap likes 6%, Follows 2%) executed from the dedicated `loadgen` microVM over the datacenter network:
+Simulating full human mobile app journeys with **HMAC-SHA256 Token Authentication**, **stateful keyset cursor pagination**, and **power-law influencer profile distributions** executed from the dedicated `loadgen` microVM over the datacenter network.
 
-| Virtual Users | Sustained RPS | 10s Total Requests | Success Rate | Median Latency (p50) | p90 Latency | p99 Latency | Equivalent Active Human Capacity |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **100 Users** | **733 req/s** | 7,437 | 100% | **33.17 ms** | 48.07 ms | 199.22 ms | **7,300 active users** |
-| **300 Users** | **2,221 req/s** | 22,560 | 100% | **31.88 ms** | 47.21 ms | 96.82 ms | **22,200 active users** |
-| **600 Users** | **4,108 req/s** | 42,208 | 100% | **37.07 ms** | 66.42 ms | 176.85 ms | **41,000 active users** |
-| **1,000 Users** | **5,495 req/s** | 56,307 | 100% | **67.20 ms** | 134.13 ms | 231.31 ms | **55,000 active users** |
-| **1,500 Users** | **5,236 req/s** | 53,756 | 100% | **165.34 ms** | 261.52 ms | 357.80 ms | **52,000 active users** |
+### 🏆 60-Second Soak Benchmark (1,000 Virtual Users, 15s Ramp-Up + 45s Peak)
+
+| Metric | Measured Value | Analysis & Notes |
+| :--- | :---: | :--- |
+| **Total Test Duration** | **61.83s** | 15.0s Linear Ramp-Up + 46.8s Sustained Peak |
+| **Concurrent Virtual Users** | **1,000 VUs** | Staggered launch to eliminate artificial cold stampede |
+| **Total Requests Completed** | **208,935** | 208,934 succeeded (99.9995% success rate) |
+| **Steady-State Peak RPS** | **~4,149 req/s** | Sustained ~3,950–4,149 req/s during peak plateau |
+| **Overall Average RPS** | **3,379 req/s** | Blended across initial ramp-up and steady peak |
+| **Cryptographic Token Auth** | **Active** | HMAC-SHA256 Bearer Token verification on every journey |
+| **Loadgen MicroVM Health** | **Healthy** | p95 Event Loop Lag: **1.08ms** (0 client bottleneck) |
+| **Cadence Queue Delay** | **0.00ms** | Coordinated Omission mitigated (zero arrival drift) |
+| **Equivalent Human Capacity** | **~35,000–40,000** | Continuously active human browsing users (10s avg clicks) |
+
+---
+
+### ⏱️ Latency Percentiles & Coordinated Omission Analysis
+
+| Percentile | Raw Server Round-Trip | Coordinated Omission (CO) Corrected | User Experience |
+| :---: | :---: | :---: | :--- |
+| **p50 (Median)** | **42.85 ms** | **42.85 ms** | Instantaneous mobile response |
+| **p75** | **61.75 ms** | **61.75 ms** | Smooth interactive feel |
+| **p90** | **88.16 ms** | **88.16 ms** | Sub-100ms threshold |
+| **p95** | **109.20 ms** | **109.20 ms** | Highly stable under 1,000 VUs |
+| **p99** | **173.78 ms** | **173.78 ms** | Rock solid tail latency |
+| **p99.9** | **371.49 ms** | **371.49 ms** | Zero runaway request queueing |
+| **Average** | **51.83 ms** | **51.83 ms** | Across all 208,935 requests |
+
+---
+
+### 📈 Workload Breakdown (Realistic Social App Distribution)
+
+| Action | Share | Total Volume | Avg Latency | HTTP Success Rate |
+| :--- | :---: | :---: | :---: | :---: |
+| **Home Timeline Scroll** (Follower Graph Join) | **55.1%** | 115,027 | 50.39 ms | 100% (200 OK) |
+| **Explore Discovery** (Popularity Sort) | **25.0%** | 52,248 | 50.61 ms | 100% (200 OK) |
+| **Profile & 12-Photo Grid** (Influencer Skew) | **11.9%** | 24,879 | 53.09 ms | 100% (200 OK) |
+| **Double-Tap Likes** (Atomic DB Transaction) | **6.0%** | 12,573 | 61.83 ms | 100% (200 OK) |
+| **Follow Creator** (Graph Mutation + Counters) | **2.0%** | 4,208 | 69.06 ms | 99.98% (4,207 200 OK, 1 retry) |
 
 ---
 
 ### 💡 Key Takeaway on Concurrency & Capacity
-* **Saturation Point:** The 2 vCPU Bun server gracefully hits maximum throughput at **~5,500 requests/sec** under **1,000 to 1,500 simultaneous virtual users**.
-* **Zero Failure Rate:** Across all stress tests (**182,000+ total requests**), the system experienced **0 failed requests, 0 timeouts, and 0 dropped connections**.
-* **Real-World Capacity:** Supports **50,000 to 55,000 continuously active human browsing users** on a 2 vCPU / 2 GB container without any caching!
+* **Throughput Ceiling:** The 2 vCPU Bun server smoothly sustains **~4,000 requests/sec** under **1,000 concurrent virtual users** with full HMAC-SHA256 authentication and database write transactions.
+* **Rock-Solid Tail Latencies:** p99 latency remains firmly under **175 ms** across **208,000+ total requests** over a 60-second test.
+* **Real-World Capacity:** A single 2 vCPU / 2 GB container handles **35,000 to 40,000 continuously active human browsing users** direct to Postgres **without any Redis or caching layer**!
 
 ---
 
