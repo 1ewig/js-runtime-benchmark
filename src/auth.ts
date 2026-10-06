@@ -2,12 +2,19 @@ import crypto from 'node:crypto'
 
 export const AUTH_SECRET = process.env.AUTH_SECRET || 'instacloud-benchmark-secret-2026'
 
+function computeHmacHex(payload: string, secret: string): string {
+  if (typeof Bun !== 'undefined' && Bun.CryptoHasher) {
+    return new Bun.CryptoHasher('sha256', secret).update(payload).digest('hex')
+  }
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex')
+}
+
 /**
  * Generate a signed Bearer token: `<userId>.<timestamp>.<signature>`
  */
 export function signAuthToken(userId: number, secret: string = AUTH_SECRET): string {
   const payload = `${userId}.${Date.now()}`
-  const hmac = crypto.createHmac('sha256', secret).update(payload).digest('hex')
+  const hmac = computeHmacHex(payload, secret)
   return `${payload}.${hmac}`
 }
 
@@ -32,7 +39,7 @@ export function verifyAuthToken(authHeader?: string | null, secret: string = AUT
   }
 
   const payload = `${userIdStr}.${timestampStr}`
-  const expectedSig = crypto.createHmac('sha256', secret).update(payload).digest('hex')
+  const expectedSig = computeHmacHex(payload, secret)
 
   const sigBuffer = Buffer.from(signature)
   const expectedBuffer = Buffer.from(expectedSig)
