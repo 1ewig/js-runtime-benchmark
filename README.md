@@ -11,12 +11,12 @@ A high-performance social media backend prototype built with **Bun 1.4.2 (Rust C
 * **Project ID:** `bb8545e1-fc83-4d22-938c-b91f5661d06d` (Branch: `main`)
 * **Live Service URL:** `https://prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com`
 
-### Provisioned Services
+### Provisioned Services (Shared Free-Tier: 4 vCPU / 4 GB Total)
 
 | Service | Type | Specs / Plan Limits | Purpose |
 | :--- | :--- | :--- | :--- |
-| **`api`** | Compute (MicroVM) | Up to 4 vCPU / 4 GB RAM | Container running Bun + Hono HTTP server |
-| **`db`** | PostgreSQL 16 | Up to 4 vCPU / 4 GB RAM, 10 GB Storage | Managed relational database (`us-east-1`) |
+| **`api`** | Compute (MicroVM) | 2 vCPU / 2 GB RAM | Container running Bun + Hono HTTP server |
+| **`db`** | PostgreSQL 16 | 2 vCPU / 2 GB RAM, 10 GB Storage | Managed relational database (`us-east-1`) |
 
 ---
 
@@ -25,7 +25,7 @@ A high-performance social media backend prototype built with **Bun 1.4.2 (Rust C
 * **Runtime:** [Bun v1.4.2](https://bun.sh) (Linux x64 container / Windows local development) — built on Bun's rewritten **Rust core**.
 * **Framework:** [Hono v4.13](https://hono.dev) — ultra-fast, lightweight web framework.
 * **Database Driver:** [`postgres.js v3.4`](https://github.com/porsager/postgres) — high-performance SQL client with tuned connection pooling:
-  * Pool Size: `max: 25`
+  * Pool Size: `max: 20` (optimized for 2 vCPU)
   * Idle Timeout: `20s`
   * Prepared Statements: `true`
 * **Type System & Quality:**
@@ -57,18 +57,20 @@ The database is migrated and pre-seeded with realistic social media data:
 | :--- | :--- | :--- |
 | `/` | `GET` | Service metadata & available route directory |
 | `/health` | `GET` | System health, DB ping latency, and memory telemetry |
-| `/api/bench/feed` | `GET` | Pure in-memory 20-post feed (isolated runtime benchmark) |
-| `/api/feed?cursor=<id>&limit=20` | `GET` | Cursor-paginated timeline with `posts` JOIN `users` |
-| `/api/users/:id` | `GET` | User profile metadata + recent 10 posts |
-| `/api/posts` | `POST` | Create a new post (`{ userId, content }`) |
+| `/api/feed/home?userId=<id>&cursor=<id>&limit=20` | `GET` | Personalized timeline of posts from followed accounts |
+| `/api/feed/explore?cursor=<id>&limit=20` | `GET` | Discovery feed of top-engagement posts |
+| `/api/users/:id` | `GET` | Profile metadata, follower/following counts, and 12-photo grid |
+| `/api/users/:id/follow` | `POST` | Toggle follow / unfollow on target user |
+| `/api/posts` | `POST` | Create photo post (`{ userId, imageUrl, caption }`) |
 | `/api/posts/:id/like` | `POST` | Atomic like transaction & `likes_count` increment |
+| `/api/bench/feed` | `GET` | Pure in-memory 20-post feed (isolated runtime benchmark) |
 
 ---
 
 ## 📊 Stress Test & Benchmark Results
 
 ### Benchmark 1: Pure In-Memory Runtime Ceiling (Bun 1.4.2 Rust + Hono)
-Executed directly inside the 4 vCPU container via `insta compute exec` (0ms network overhead):
+Executed directly inside the 2 vCPU container via `insta compute exec` (0ms network overhead):
 
 ```
 ⚡ Sustained Throughput:   70,986 requests/sec
@@ -76,7 +78,7 @@ Executed directly inside the 4 vCPU container via `insta compute exec` (0ms netw
 ❌ Failed Requests:        0 (100% success)
 ⏱️ Median Latency (p50):    0.57 ms (< 1 millisecond)
 ⏱️ 99th Percentile (p99):  1.69 ms
-💾 Memory Consumption:     52 MB RAM (out of 4 GB available!)
+💾 Memory Consumption:     52 MB RAM (out of 2 GB available!)
 ```
 
 ### Benchmark 2: Full-Stack with PostgreSQL 16 (`/api/feed` JOINs)
@@ -92,7 +94,7 @@ Querying 50,000 posts joined with users across the internal datacenter network:
 ```
 
 ### 💡 Key Takeaway on Concurrency Capacity
-* At **~6,000 database requests/sec**, this free-tier 4 vCPU setup supports **60,000 to 90,000 concurrently active browsing users** (assuming average click interval of 10–15s).
+* At **~6,000 database requests/sec**, this free-tier 2 vCPU / 2 GB setup supports **60,000 to 90,000 concurrently active browsing users** (assuming average click interval of 10–15s).
 * With an in-memory or Redis caching layer on top of Bun, the same container can easily absorb **500,000+ active users**.
 * Note on external testing: Running load tests from residential broadband across 7,000 miles (e.g. Asia to US-East) reflects home ISP Wi-Fi packet latency (~250ms RTT), not server capacity. Datacenter-local execution reveals true hardware throughput.
 

@@ -8,6 +8,52 @@ if (!dbUrl) {
 
 const sql = postgres(dbUrl, { max: 10, ssl: 'require' })
 
+const curatedPhotos = [
+  'photo-1512917774080-9991f1c4c750', // architecture
+  'photo-1507525428034-b723cf961d3e', // beach/ocean
+  'photo-1519681393784-d120267933ba', // starry mountains
+  'photo-1517841905240-472988babdf9', // portrait
+  'photo-1565299624946-b28f40a0ae38', // artisan pizza
+  'photo-1498050108023-c5249f4df085', // tech setup
+  'photo-1470071459604-3b5ec3a7fe05', // misty forest
+  'photo-1488646953014-85cb44e25828', // travel suitcase
+  'photo-1515378791036-0648a3ef77b2', // aesthetic workspace
+  'photo-1534447677768-be436bb09401', // northern lights
+  'photo-1504674900247-0877df9cc836', // culinary dish
+  'photo-1492691527719-9d1e07e534b4', // street photography
+  'photo-1526778548025-fa2f459cd5c1', // coastal cliffs
+  'photo-1469474968028-56623f02e42e', // nature trail
+  'photo-1500648767791-00dcc994a43e', // creator portrait
+  'photo-1494790108377-be9c29b29330', // studio portrait
+  'photo-1539571696357-5a69c17a67c6', // urban fashion
+  'photo-1522071820081-009f0129c71c', // collaborative team
+  'photo-1464822759023-fed622ff2c3b', // snowy peaks
+  'photo-1518791841217-8f162f1e1131', // cozy cat
+  'photo-1543610892-0b1f7e6d8ac1', // abstract gradient
+  'photo-1531297484001-80022131f5a1', // cyberpunk laptop
+  'photo-1550745165-9bc0b252726f', // retro arcade
+  'photo-1516259762381-22954d7d3ad2', // code editor
+  'photo-1493770348161-369560ae357d', // brunch table
+]
+
+const sampleBios = [
+  '📸 Visual storyteller & photographer | 📍 NYC',
+  '⚡ Building high-throughput cloud infrastructure @ InstaCloud',
+  '🌿 Nature lover | Weekend hiker | Coffee enthusiast ☕',
+  '🎨 Digital artist & UI/UX designer. Making the web beautiful.',
+  '🚀 Tech founder & investor. Obsessed with distributed systems.',
+  '🍕 Pizza connoisseur | Exploring hidden food gems worldwide',
+  '📚 Reading 50 books a year | Writing about life and philosophy',
+  '🏃 Marathon runner & fitness coach | Daily motivation',
+  '✨ Lifestyle, aesthetics, and minimalist living',
+  '🎵 Music producer & sound designer | Synthesizers & beats',
+  '🌍 42 countries and counting. Wandering with a camera.',
+  '💻 Rust, Bun & TypeScript developer. Building the future.',
+  '🌊 Surfer, ocean activist, and drone videographer',
+  '🍵 Matcha obsessed | Interior design & plant parent',
+  '🎮 Game developer | Pixel art & retro nostalgia',
+]
+
 const sampleSnippets = [
   'Just deployed my first Bun + Hono API on InstaCloud! Insanely fast ⚡',
   'Thinking about distributed systems and cache invalidation today...',
@@ -23,16 +69,10 @@ const sampleSnippets = [
 
 async function seed() {
   const startTime = Date.now()
-  console.log('🌱 Starting database seeding...')
-
-  // Check if already seeded
-  const [{ count: existingUsers }] = await sql`SELECT count(*)::int FROM users`
-  if (existingUsers > 0) {
-    console.log(`ℹ️ Database already has ${existingUsers} users. Skipping user insertion or cleaning first...`)
-  }
+  console.log('🌱 Starting comprehensive Instagram database seeding...')
 
   // 1. Generate & Insert 5,000 Users
-  console.log('👥 Inserting 5,000 users in batches...')
+  console.log('👥 Inserting / updating 5,000 users in batches...')
   const USER_COUNT = 5000
   const USER_BATCH_SIZE = 1000
 
@@ -44,82 +84,136 @@ async function seed() {
         username: `user_${idx}`,
         display_name: `Dev User #${idx}`,
         avatar_url: `https://api.dicebear.com/7.x/identicon/svg?seed=user_${idx}`,
+        bio: sampleBios[idx % sampleBios.length],
+        followers_count: 0,
+        following_count: 0,
+        posts_count: 0,
         created_at: new Date(Date.now() - Math.floor(Math.random() * 30 * 86400000)),
       })
     }
     await sql`
-      INSERT INTO users ${sql(usersBatch, 'username', 'display_name', 'avatar_url', 'created_at')}
+      INSERT INTO users ${sql(usersBatch, 'username', 'display_name', 'avatar_url', 'bio', 'followers_count', 'following_count', 'posts_count', 'created_at')}
       ON CONFLICT (username) DO NOTHING
     `
     process.stdout.write(`  Inserted ${Math.min(i + USER_BATCH_SIZE, USER_COUNT)} / ${USER_COUNT} users\r`)
   }
-  console.log(`\n✅ 5,000 Users inserted.`)
+  console.log(`\n✅ 5,000 Users ready.`)
 
   // 2. Fetch min and max user IDs
   const [{ min: minUserId, max: maxUserId }] = await sql`SELECT min(id)::int, max(id)::int FROM users`
   console.log(`📍 User ID range: ${minUserId} to ${maxUserId}`)
 
-  // 3. Generate & Insert 50,000 Posts
-  console.log('📝 Inserting 50,000 posts in batches...')
+  // 3. Generate & Insert 50,000 Posts with Media
+  console.log('📝 Inserting 50,000 photo posts in batches...')
   const POST_COUNT = 50000
   const POST_BATCH_SIZE = 2000
 
-  for (let i = 0; i < POST_COUNT; i += POST_BATCH_SIZE) {
-    const postsBatch = []
-    for (let j = 0; j < POST_BATCH_SIZE && i + j < POST_COUNT; j++) {
-      const randomUserId = Math.floor(Math.random() * (maxUserId - minUserId + 1)) + minUserId
-      const snippet = sampleSnippets[Math.floor(Math.random() * sampleSnippets.length)]
-      postsBatch.push({
-        user_id: randomUserId,
-        content: `${snippet} [#${i + j + 1}]`,
-        likes_count: 0,
-        created_at: new Date(Date.now() - Math.floor(Math.random() * 14 * 86400000)),
-      })
+  const [{ count: existingPosts }] = await sql`SELECT count(*)::int FROM posts`
+  if (existingPosts < POST_COUNT) {
+    for (let i = existingPosts; i < POST_COUNT; i += POST_BATCH_SIZE) {
+      const postsBatch = []
+      for (let j = 0; j < POST_BATCH_SIZE && i + j < POST_COUNT; j++) {
+        const randomUserId = Math.floor(Math.random() * (maxUserId - minUserId + 1)) + minUserId
+        const snippet = sampleSnippets[Math.floor(Math.random() * sampleSnippets.length)]
+        const photoId = curatedPhotos[(i + j) % curatedPhotos.length]
+        const imgUrl = `https://images.unsplash.com/${photoId}?auto=format&fit=crop&w=800&q=80`
+
+        postsBatch.push({
+          user_id: randomUserId,
+          content: `${snippet} [#${i + j + 1}]`,
+          caption: `${snippet} [#${i + j + 1}]`,
+          image_url: imgUrl,
+          likes_count: 0,
+          comments_count: 0,
+          created_at: new Date(Date.now() - Math.floor(Math.random() * 14 * 86400000)),
+        })
+      }
+      await sql`
+        INSERT INTO posts ${sql(postsBatch, 'user_id', 'content', 'caption', 'image_url', 'likes_count', 'comments_count', 'created_at')}
+      `
+      process.stdout.write(`  Inserted ${Math.min(i + POST_BATCH_SIZE, POST_COUNT)} / ${POST_COUNT} posts\r`)
     }
-    await sql`
-      INSERT INTO posts ${sql(postsBatch, 'user_id', 'content', 'likes_count', 'created_at')}
-    `
-    process.stdout.write(`  Inserted ${Math.min(i + POST_BATCH_SIZE, POST_COUNT)} / ${POST_COUNT} posts\r`)
   }
-  console.log(`\n✅ 50,000 Posts inserted.`)
+  console.log(`\n✅ Posts ready.`)
 
   // 4. Fetch min and max post IDs
   const [{ min: minPostId, max: maxPostId }] = await sql`SELECT min(id)::int, max(id)::int FROM posts`
-  console.log(`📍 Post ID range: ${minPostId} to ${maxPostId}`)
 
-  // 5. Generate & Insert 100,000 Likes
-  console.log('❤️ Inserting 100,000 likes in batches...')
-  const LIKE_COUNT = 100000
-  const LIKE_BATCH_SIZE = 2500
+  // 5. Generate & Insert Follows Graph (Power-Law Distribution)
+  console.log('🤝 Ensuring ~150,000 follow connections...')
+  const [{ count: existingFollows }] = await sql`SELECT count(*)::int FROM follows`
+  if (existingFollows < 100000) {
+    const topInfluencerThreshold = Math.min(minUserId + 50, maxUserId)
+    const TARGET_FOLLOWS = 150000
+    const FOLLOW_BATCH_SIZE = 2500
+    let insertedCount = existingFollows
+    const pairsBatch: { follower_id: number; following_id: number }[] = []
 
-  for (let i = 0; i < LIKE_COUNT; i += LIKE_BATCH_SIZE) {
-    const likesBatch = []
-    const seenPairs = new Set<string>()
+    for (let followerId = minUserId; followerId <= maxUserId && insertedCount < TARGET_FOLLOWS; followerId++) {
+      const followsToMake = Math.floor(Math.random() * 21) + 25
 
-    while (likesBatch.length < LIKE_BATCH_SIZE && i + likesBatch.length < LIKE_COUNT) {
-      const randomUserId = Math.floor(Math.random() * (maxUserId - minUserId + 1)) + minUserId
-      const randomPostId = Math.floor(Math.random() * (maxPostId - minPostId + 1)) + minPostId
-      const pairKey = `${randomUserId}-${randomPostId}`
-      if (!seenPairs.has(pairKey)) {
-        seenPairs.add(pairKey)
-        likesBatch.push({
-          user_id: randomUserId,
-          post_id: randomPostId,
-          created_at: new Date(),
-        })
+      for (let f = 0; f < followsToMake; f++) {
+        const followingId = Math.random() < 0.70
+          ? Math.floor(Math.random() * (topInfluencerThreshold - minUserId + 1)) + minUserId
+          : Math.floor(Math.random() * (maxUserId - minUserId + 1)) + minUserId
+
+        if (followerId === followingId) continue
+
+        pairsBatch.push({ follower_id: followerId, following_id: followingId })
+        if (pairsBatch.length >= FOLLOW_BATCH_SIZE) {
+          await sql`
+            INSERT INTO follows ${sql(pairsBatch, 'follower_id', 'following_id')}
+            ON CONFLICT DO NOTHING
+          `
+          insertedCount += pairsBatch.length
+          pairsBatch.length = 0
+          process.stdout.write(`  Follows: ${insertedCount.toLocaleString()} / ~${TARGET_FOLLOWS.toLocaleString()}\r`)
+        }
       }
     }
-
-    await sql`
-      INSERT INTO likes ${sql(likesBatch, 'user_id', 'post_id', 'created_at')}
-      ON CONFLICT DO NOTHING
-    `
-    process.stdout.write(`  Inserted ${Math.min(i + LIKE_BATCH_SIZE, LIKE_COUNT)} / ${LIKE_COUNT} likes\r`)
+    if (pairsBatch.length > 0) {
+      await sql`
+        INSERT INTO follows ${sql(pairsBatch, 'follower_id', 'following_id')}
+        ON CONFLICT DO NOTHING
+      `
+    }
   }
-  console.log(`\n✅ 100,000 Likes inserted.`)
+  console.log(`\n✅ Follow graph ready.`)
 
-  // 6. Update likes_count in posts table for consistency
-  console.log('🔄 Syncing likes_count counters...')
+  // 6. Generate & Insert 100,000 Likes
+  console.log('❤️ Ensuring likes are populated...')
+  const [{ count: existingLikes }] = await sql`SELECT count(*)::int FROM likes`
+  if (existingLikes < 100000) {
+    const LIKE_COUNT = 100000
+    const LIKE_BATCH_SIZE = 2500
+    for (let i = existingLikes; i < LIKE_COUNT; i += LIKE_BATCH_SIZE) {
+      const likesBatch = []
+      const seenPairs = new Set<string>()
+
+      while (likesBatch.length < LIKE_BATCH_SIZE && i + likesBatch.length < LIKE_COUNT) {
+        const randomUserId = Math.floor(Math.random() * (maxUserId - minUserId + 1)) + minUserId
+        const randomPostId = Math.floor(Math.random() * (maxPostId - minPostId + 1)) + minPostId
+        const pairKey = `${randomUserId}-${randomPostId}`
+        if (!seenPairs.has(pairKey)) {
+          seenPairs.add(pairKey)
+          likesBatch.push({
+            user_id: randomUserId,
+            post_id: randomPostId,
+            created_at: new Date(),
+          })
+        }
+      }
+
+      await sql`
+        INSERT INTO likes ${sql(likesBatch, 'user_id', 'post_id', 'created_at')}
+        ON CONFLICT DO NOTHING
+      `
+    }
+  }
+  console.log(`✅ Likes ready.`)
+
+  // 7. Synchronize all denormalized counters
+  console.log('🔄 Synchronizing denormalized counters...')
   await sql`
     UPDATE posts p
     SET likes_count = sub.count
@@ -130,19 +224,42 @@ async function seed() {
     ) sub
     WHERE p.id = sub.post_id;
   `
-  console.log('✅ likes_count synced.')
 
-  // Final verification
+  await sql`
+    UPDATE users u
+    SET following_count = COALESCE(f.cnt, 0)
+    FROM (SELECT follower_id, COUNT(*)::int AS cnt FROM follows GROUP BY follower_id) f
+    WHERE u.id = f.follower_id;
+  `
+
+  await sql`
+    UPDATE users u
+    SET followers_count = COALESCE(f.cnt, 0)
+    FROM (SELECT following_id, COUNT(*)::int AS cnt FROM follows GROUP BY following_id) f
+    WHERE u.id = f.following_id;
+  `
+
+  await sql`
+    UPDATE users u
+    SET posts_count = COALESCE(p.cnt, 0)
+    FROM (SELECT user_id, COUNT(*)::int AS cnt FROM posts GROUP BY user_id) p
+    WHERE u.id = p.user_id;
+  `
+  console.log('✅ All counters synced.')
+
+  // Final summary
   const [{ count: finalUsers }] = await sql`SELECT count(*)::int FROM users`
   const [{ count: finalPosts }] = await sql`SELECT count(*)::int FROM posts`
   const [{ count: finalLikes }] = await sql`SELECT count(*)::int FROM likes`
+  const [{ count: finalFollows }] = await sql`SELECT count(*)::int FROM follows`
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
   console.log('\n📊 Seeding Complete Summary:')
-  console.log(`   - Users: ${finalUsers.toLocaleString()}`)
-  console.log(`   - Posts: ${finalPosts.toLocaleString()}`)
-  console.log(`   - Likes: ${finalLikes.toLocaleString()}`)
-  console.log(`   - Elapsed Time: ${elapsed}s`)
+  console.log(`   - Users:   ${finalUsers.toLocaleString()}`)
+  console.log(`   - Posts:   ${finalPosts.toLocaleString()}`)
+  console.log(`   - Likes:   ${finalLikes.toLocaleString()}`)
+  console.log(`   - Follows: ${finalFollows.toLocaleString()}`)
+  console.log(`   - Elapsed: ${elapsed}s`)
 
   await sql.end()
 }
