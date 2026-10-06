@@ -85,12 +85,6 @@ async function testAll() {
   const lJson: any = await lRes.json()
   console.log('Status:', lRes.status, lJson)
 
-  // 8. In-Memory Pure Compute Benchmark Feed
-  console.log('\n8️⃣ GET /api/bench/feed')
-  const bRes = await fetch(`${baseUrl}/api/bench/feed`)
-  const bJson: any = await bRes.json()
-  console.log('Status:', bRes.status, `Cached: ${bJson.cached}, Count: ${bJson.count}`)
-
   console.log('\n🎉 ALL INSTAGRAM API ENDPOINTS VERIFIED SUCCESSFULLY!')
 }
 

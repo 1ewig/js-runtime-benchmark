@@ -11,11 +11,12 @@ A high-performance social media backend prototype built with **Bun 1.4.2 (Rust C
 * **Project ID:** `bb8545e1-fc83-4d22-938c-b91f5661d06d` (Branch: `main`)
 * **Live Service URL:** `https://prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com`
 
-### Provisioned Services (Shared Free-Tier: 4 vCPU / 4 GB Total)
+### Provisioned Services (2 vCPU / 2 GB RAM per Service)
 
 | Service | Type | Specs / Plan Limits | Purpose |
 | :--- | :--- | :--- | :--- |
 | **`api`** | Compute (MicroVM) | 2 vCPU / 2 GB RAM | Container running Bun + Hono HTTP server |
+| **`loadgen`** | Compute (MicroVM) | 2 vCPU / 2 GB RAM | Dedicated distributed realistic load generator |
 | **`db`** | PostgreSQL 16 | 2 vCPU / 2 GB RAM, 10 GB Storage | Managed relational database (`us-east-1`) |
 
 ---
@@ -31,7 +32,6 @@ A high-performance social media backend prototype built with **Bun 1.4.2 (Rust C
 * **Type System & Quality:**
   * **TypeScript 7** (`tsc --noEmit`)
   * **Oxlint v1.87** — blazingly fast Rust-based linter (runs in <15ms).
-  * **Autocannon v8** — HTTP load testing and benchmarking.
 
 ---
 
@@ -63,43 +63,11 @@ The database is migrated and pre-seeded with realistic social media data:
 | `/api/users/:id/follow` | `POST` | Toggle follow / unfollow on target user |
 | `/api/posts` | `POST` | Create photo post (`{ userId, imageUrl, caption }`) |
 | `/api/posts/:id/like` | `POST` | Atomic like transaction & `likes_count` increment |
-| `/api/bench/feed` | `GET` | Pure in-memory 20-post feed (isolated runtime benchmark) |
 
 ---
 
-## 📊 Stress Test & Benchmark Results (2 vCPU / 2 GB MicroVM)
+## 📊 Realistic User Journey Simulation Benchmark (2 vCPU / 2 GB MicroVM)
 
-Executed directly inside the 2 vCPU microVM via `insta compute exec` (0ms network delay) to reveal true hardware capacity:
-
-### 1. Pure In-Memory Runtime Ceiling (`/api/bench/feed`)
-* **⚡ Sustained Throughput:** **60,754 requests/sec**
-* **📦 Completed in 10s:** 607,568 requests (0 failures)
-* **⏱️ Latency:** p50: **0.67 ms**, p90: **1.25 ms**, p99: **1.91 ms**
-* **💾 Memory Consumption:** **47 MB RSS** (out of 2,048 MB available)
-
-### 2. User Profile Grid (`/api/users/:id`)
-* **⚡ Sustained Throughput:** **6,510 requests/sec**
-* **📦 Completed in 10s:** 65,120 queries (0 failures)
-* **⏱️ Latency:** p50: **4.23 ms**, p90: **6.15 ms**, p99: **10.16 ms**
-* **💾 Memory Consumption:** **41 MB RSS**
-
-### 3. Explore Discovery Feed (`/api/feed/explore`)
-Querying 50,000 posts indexed by engagement (`likes_count DESC, id DESC`) joined with users:
-* **⚡ Sustained Throughput:** **5,733 requests/sec**
-* **📦 Completed in 10s:** 57,353 queries (0 failures)
-* **⏱️ Latency:** p50: **4.95 ms**, p90: **7.89 ms**, p99: **13.15 ms**
-* **💾 Memory Consumption:** **43 MB RSS**
-
-### 4. Home Timeline (`/api/feed/home?userId=1`)
-Querying relational subquery traversing 150,000 follow connections + 50,000 posts:
-* **⚡ Sustained Throughput:** **4,211 requests/sec**
-* **📦 Completed in 10s:** 42,129 queries (0 failures)
-* **⏱️ Latency:** p50: **5.19 ms**, p90: **11.78 ms**, p99: **37.97 ms**
-* **💾 Memory Consumption:** **44 MB RSS**
-
----
-
-### 5. Distributed Realistic User Journey Benchmark (`loadgen` -> `api`)
 Simulating full human mobile app journeys (Home timeline scrolling 55%, Explore discovery 25%, Profile grid 12%, Double-tap likes 6%, Follows 2%) executed from the dedicated `loadgen` microVM over the datacenter network:
 
 | Virtual Users | Sustained RPS | 10s Total Requests | Success Rate | Median Latency (p50) | p90 Latency | p99 Latency | Equivalent Active Human Capacity |
@@ -113,9 +81,9 @@ Simulating full human mobile app journeys (Home timeline scrolling 55%, Explore 
 ---
 
 ### 💡 Key Takeaway on Concurrency & Capacity
-* **Saturation Point:** The 1 vCPU Bun server gracefully hits maximum throughput at **~5,500 requests/sec** under **1,000 to 1,500 simultaneous virtual users**.
+* **Saturation Point:** The 2 vCPU Bun server gracefully hits maximum throughput at **~5,500 requests/sec** under **1,000 to 1,500 simultaneous virtual users**.
 * **Zero Failure Rate:** Across all stress tests (**182,000+ total requests**), the system experienced **0 failed requests, 0 timeouts, and 0 dropped connections**.
-* **Real-World Capacity:** Supports **50,000 to 55,000 continuously active human browsing users** on a single 1 vCPU / 1 GB container without any caching!
+* **Real-World Capacity:** Supports **50,000 to 55,000 continuously active human browsing users** on a 2 vCPU / 2 GB container without any caching!
 
 ---
 
@@ -156,6 +124,6 @@ bunx insta compute metrics api
 # Deploy code changes to InstaCloud
 bunx insta deploy . --port 3000
 
-# Execute internal commands directly in the microVM
-bunx insta compute exec api -- bun run scripts/bench-internal.ts --concurrency 50 --duration 10
+# Trigger realistic user simulation benchmark from loadgen microVM
+curl "https://<loadgen-url>/run?users=1000&duration=10&thinkTimeMs=200"
 ```

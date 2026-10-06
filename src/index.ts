@@ -17,7 +17,6 @@ app.get('/', (c) => {
       'POST /api/users/:id/follow',
       'POST /api/posts',
       'POST /api/posts/:id/like',
-      'GET  /api/bench/feed',
     ],
   })
 })
@@ -414,29 +413,6 @@ app.post('/api/posts/:id/like', async (c) => {
   } catch (err: any) {
     return c.json({ error: 'Failed to like post', details: err.message }, 500)
   }
-})
-
-// In-Memory Benchmark Endpoint (Baseline Runtime Speed)
-const inMemoryFeed = Array.from({ length: 20 }, (_, i) => ({
-  id: 100000 + i,
-  image_url: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800',
-  caption: `Benchmarking Bun 1.4 (Rust core) on InstaCloud 2 vCPU / 2 GB microVM! Post #${i + 1} ⚡`,
-  likes_count: 42 + i * 3,
-  comments_count: 5,
-  created_at: new Date(Date.now() - i * 60000).toISOString(),
-  user_id: 100 + i,
-  username: `rust_dev_${i + 1}`,
-  display_name: `Rustacean #${i + 1}`,
-  avatar_url: `https://api.dicebear.com/7.x/identicon/svg?seed=rust_${i}`,
-}))
-
-app.get('/api/bench/feed', (c) => {
-  return c.json({
-    cached: true,
-    engine: 'Bun ' + Bun.version,
-    count: inMemoryFeed.length,
-    posts: inMemoryFeed,
-  })
 })
 
 const port = Number(process.env.PORT) || 3000
