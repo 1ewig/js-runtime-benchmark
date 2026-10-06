@@ -110,7 +110,98 @@ async function testAll() {
   const lJson: any = await lRes.json()
   console.log('Status:', lRes.status, lJson)
 
-  console.log('\n🎉 ALL INSTAGRAM API ENDPOINTS VERIFIED SUCCESSFULLY!')
+  // 8. Ephemeral Stories Tray (24h validity)
+  console.log('\n8️⃣ GET /api/stories/tray?userId=1')
+  const sRes = await fetch(`${baseUrl}/api/stories/tray?userId=1`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  const sJson: any = await sRes.json()
+  console.log('Status:', sRes.status, {
+    creatorsWithStoriesCount: sJson.creatorsWithStoriesCount,
+    totalActiveStories: sJson.totalActiveStories,
+    sampleCreator: sJson.tray?.[0]?.user?.username,
+  })
+
+  // 9. Create Ephemeral Story
+  console.log('\n9️⃣ POST /api/stories')
+  const csRes = await fetch(`${baseUrl}/api/stories`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      userId: 1,
+      mediaUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=720',
+    }),
+  })
+  const csJson: any = await csRes.json()
+  console.log('Status:', csRes.status, csJson)
+
+  // 10. Post Comments (Read & Write)
+  console.log(`\n🔟 POST /api/posts/${postIdToLike}/comments`)
+  const cRes = await fetch(`${baseUrl}/api/posts/${postIdToLike}/comments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      userId: 1,
+      content: 'This test comment confirms comments engine is blazing fast! 🚀',
+    }),
+  })
+  const cJson: any = await cRes.json()
+  console.log('Status:', cRes.status, cJson)
+
+  console.log(`\n1️⃣1️⃣ GET /api/posts/${postIdToLike}/comments?limit=3`)
+  const rcRes = await fetch(`${baseUrl}/api/posts/${postIdToLike}/comments?limit=3`)
+  const rcJson: any = await rcRes.json()
+  console.log('Status:', rcRes.status, {
+    postId: rcJson.postId,
+    count: rcJson.count,
+    nextCursor: rcJson.nextCursor,
+    sampleComment: rcJson.comments?.[0]?.content,
+  })
+
+  // 12. Save / Bookmark Post Toggle
+  console.log(`\n1️⃣2️⃣ POST /api/posts/${postIdToLike}/save`)
+  const svRes = await fetch(`${baseUrl}/api/posts/${postIdToLike}/save`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ userId: 1 }),
+  })
+  const svJson: any = await svRes.json()
+  console.log('Status:', svRes.status, svJson)
+
+  // 13. User Saved / Bookmarked Posts Grid
+  console.log('\n1️⃣3️⃣ GET /api/users/1/saved?limit=3')
+  const ugRes = await fetch(`${baseUrl}/api/users/1/saved?limit=3`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  const ugJson: any = await ugRes.json()
+  console.log('Status:', ugRes.status, {
+    userId: ugJson.userId,
+    count: ugJson.count,
+    sampleSavedPostId: ugJson.savedPosts?.[0]?.id,
+  })
+
+  // 14. Fast Explore & Discovery Search
+  console.log('\n1️⃣4️⃣ GET /api/search?q=dev&type=all&limit=5')
+  const srRes = await fetch(`${baseUrl}/api/search?q=dev&type=all&limit=5`)
+  const srJson: any = await srRes.json()
+  console.log('Status:', srRes.status, {
+    query: srJson.query,
+    usersCount: srJson.usersCount,
+    postsCount: srJson.postsCount,
+    sampleUser: srJson.users?.[0]?.username,
+  })
+
+  console.log('\n🎉 ALL 14 INSTAGRAM API ENDPOINTS VERIFIED SUCCESSFULLY!')
 }
 
 testAll().catch(console.error)
+

@@ -72,8 +72,13 @@ export function createMetricsCollector(duration: number, startTime: number) {
   const actionStats: Record<string, ActionStats> = {
     homeTimeline: { count: 0, errors: 0, totalMs: 0, statusCodes: {} },
     exploreFeed: { count: 0, errors: 0, totalMs: 0, statusCodes: {} },
+    storiesTray: { count: 0, errors: 0, totalMs: 0, statusCodes: {} },
     profileView: { count: 0, errors: 0, totalMs: 0, statusCodes: {} },
+    readComments: { count: 0, errors: 0, totalMs: 0, statusCodes: {} },
+    writeComment: { count: 0, errors: 0, totalMs: 0, statusCodes: {} },
     likePost: { count: 0, errors: 0, totalMs: 0, statusCodes: {} },
+    searchQuery: { count: 0, errors: 0, totalMs: 0, statusCodes: {} },
+    savePost: { count: 0, errors: 0, totalMs: 0, statusCodes: {} },
     followCreator: { count: 0, errors: 0, totalMs: 0, statusCodes: {} },
   }
 
@@ -110,7 +115,11 @@ export function createMetricsCollector(duration: number, startTime: number) {
       }
     }
 
-    const act = actionStats[actionName]
+    let act = actionStats[actionName]
+    if (!act) {
+      act = { count: 0, errors: 0, totalMs: 0, statusCodes: {} }
+      actionStats[actionName] = act
+    }
     act.count++
     if (!isSuccess) act.errors++
     act.totalMs += rawElapsed

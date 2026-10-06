@@ -77,7 +77,28 @@ async function migrate() {
     );
   `
 
-  // 6. High-throughput indexes tailored for Instagram access patterns
+  // 6. Ephemeral Stories table (24h validity)
+  await sql`
+    CREATE TABLE IF NOT EXISTS stories (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      media_url TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '24 hours'
+    );
+  `
+
+  // 7. Saved Posts / Bookmarks table
+  await sql`
+    CREATE TABLE IF NOT EXISTS saved_posts (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, post_id)
+    );
+  `
+
+  // High-throughput indexes tailored for Instagram access patterns
   console.log('📌 Creating and verifying indexes...')
   // Home feed fan-in keyset lookup: WHERE user_id IN (...) AND id < cursor ORDER BY id DESC
   await sql`CREATE INDEX IF NOT EXISTS idx_posts_user_id_id ON posts (user_id, id DESC);`
@@ -90,6 +111,13 @@ async function migrate() {
   await sql`CREATE INDEX IF NOT EXISTS idx_likes_post_id ON likes (post_id);`
   await sql`CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes (user_id);`
   await sql`CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments (post_id, id DESC);`
+  // Stories tray lookup: active stories from followed users
+  await sql`CREATE INDEX IF NOT EXISTS idx_stories_user_expires ON stories (user_id, expires_at DESC);`
+  await sql`CREATE INDEX IF NOT EXISTS idx_stories_expires_at ON stories (expires_at DESC);`
+  // Saved posts lookup: user's bookmarks
+  await sql`CREATE INDEX IF NOT EXISTS idx_saved_posts_user ON saved_posts (user_id, created_at DESC);`
+  // Search lookup by username
+  await sql`CREATE INDEX IF NOT EXISTS idx_users_username_lower ON users (lower(username));`
 
   console.log('✅ Instagram schema & index migrations completed successfully.')
   await sql.end()

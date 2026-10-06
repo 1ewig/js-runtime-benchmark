@@ -67,6 +67,19 @@ const sampleSnippets = [
   'Scaling to zero when idle saves so much budget and computing resources.',
 ]
 
+const sampleComments = [
+  'Stunning shot! 🔥',
+  'Love the lighting and composition here.',
+  'What camera did you use for this?',
+  'This is incredible 👏',
+  'Major inspiration right here.',
+  'Vibes are immaculate ✨',
+  'Great perspective on this one.',
+  'Adding this to my bucket list 📍',
+  'So clean! Keep shipping.',
+  'Obsessed with this color palette.',
+]
+
 async function seed() {
   const startTime = Date.now()
   console.log('🌱 Starting comprehensive Instagram database seeding...')
@@ -212,7 +225,90 @@ async function seed() {
   }
   console.log(`✅ Likes ready.`)
 
-  // 7. Synchronize all denormalized counters
+  // 7. Generate & Insert 25,000 Comments
+  console.log('💬 Ensuring comments are populated...')
+  const [{ count: existingComments }] = await sql`SELECT count(*)::int FROM comments`
+  if (existingComments < 25000) {
+    const COMMENT_COUNT = 25000
+    const COMMENT_BATCH_SIZE = 2500
+    for (let i = existingComments; i < COMMENT_COUNT; i += COMMENT_BATCH_SIZE) {
+      const commentsBatch = []
+      for (let j = 0; j < COMMENT_BATCH_SIZE && i + j < COMMENT_COUNT; j++) {
+        const randomUserId = Math.floor(Math.random() * (maxUserId - minUserId + 1)) + minUserId
+        const randomPostId = Math.floor(Math.random() * (maxPostId - minPostId + 1)) + minPostId
+        const commentText = sampleComments[(i + j) % sampleComments.length]
+        commentsBatch.push({
+          post_id: randomPostId,
+          user_id: randomUserId,
+          content: commentText,
+          created_at: new Date(Date.now() - Math.floor(Math.random() * 7 * 86400000)),
+        })
+      }
+      await sql`
+        INSERT INTO comments ${sql(commentsBatch, 'post_id', 'user_id', 'content', 'created_at')}
+      `
+      process.stdout.write(`  Comments: ${Math.min(i + COMMENT_BATCH_SIZE, COMMENT_COUNT).toLocaleString()} / ${COMMENT_COUNT.toLocaleString()}\r`)
+    }
+    console.log('\n✅ Comments ready.')
+  }
+
+  // 8. Generate & Insert ~2,500 Active Stories (Expires in +12h to +24h)
+  console.log('📱 Populating active ephemeral stories...')
+  const [{ count: existingStories }] = await sql`SELECT count(*)::int FROM stories WHERE expires_at > NOW()`
+  if (existingStories < 2500) {
+    const topCreators = Math.min(minUserId + 250, maxUserId)
+    const storiesBatch = []
+    for (let u = minUserId; u <= topCreators; u++) {
+      const storiesCount = Math.floor(Math.random() * 10) + 1
+      for (let s = 0; s < storiesCount; s++) {
+        const photoId = curatedPhotos[(u + s) % curatedPhotos.length]
+        const hoursLeft = Math.floor(Math.random() * 20) + 4
+        storiesBatch.push({
+          user_id: u,
+          media_url: `https://images.unsplash.com/${photoId}?auto=format&fit=crop&w=720&q=80`,
+          created_at: new Date(Date.now() - Math.floor(Math.random() * 4 * 3600000)),
+          expires_at: new Date(Date.now() + hoursLeft * 3600000),
+        })
+      }
+    }
+    if (storiesBatch.length > 0) {
+      await sql`
+        INSERT INTO stories ${sql(storiesBatch, 'user_id', 'media_url', 'created_at', 'expires_at')}
+      `
+    }
+    console.log(`✅ ${storiesBatch.length} Active stories ready.`)
+  }
+
+  // 9. Generate & Insert ~5,000 Bookmarks / Saved Posts
+  console.log('🔖 Populating bookmarks / saved posts...')
+  const [{ count: existingSaved }] = await sql`SELECT count(*)::int FROM saved_posts`
+  if (existingSaved < 5000) {
+    const SAVED_COUNT = 5000
+    const savedBatch = []
+    const seenSaved = new Set<string>()
+    for (let i = 0; i < SAVED_COUNT; i++) {
+      const randomUserId = Math.floor(Math.random() * 500) + minUserId
+      const randomPostId = Math.floor(Math.random() * 1000) + minPostId
+      const key = `${randomUserId}-${randomPostId}`
+      if (!seenSaved.has(key)) {
+        seenSaved.add(key)
+        savedBatch.push({
+          user_id: randomUserId,
+          post_id: randomPostId,
+          created_at: new Date(),
+        })
+      }
+    }
+    if (savedBatch.length > 0) {
+      await sql`
+        INSERT INTO saved_posts ${sql(savedBatch, 'user_id', 'post_id', 'created_at')}
+        ON CONFLICT DO NOTHING
+      `
+    }
+    console.log(`✅ Saved posts ready.`)
+  }
+
+  // 10. Synchronize all denormalized counters
   console.log('🔄 Synchronizing denormalized counters...')
   await sql`
     UPDATE posts p
@@ -220,6 +316,17 @@ async function seed() {
     FROM (
       SELECT post_id, count(*)::int AS count
       FROM likes
+      GROUP BY post_id
+    ) sub
+    WHERE p.id = sub.post_id;
+  `
+
+  await sql`
+    UPDATE posts p
+    SET comments_count = sub.count
+    FROM (
+      SELECT post_id, count(*)::int AS count
+      FROM comments
       GROUP BY post_id
     ) sub
     WHERE p.id = sub.post_id;
@@ -252,14 +359,20 @@ async function seed() {
   const [{ count: finalPosts }] = await sql`SELECT count(*)::int FROM posts`
   const [{ count: finalLikes }] = await sql`SELECT count(*)::int FROM likes`
   const [{ count: finalFollows }] = await sql`SELECT count(*)::int FROM follows`
+  const [{ count: finalComments }] = await sql`SELECT count(*)::int FROM comments`
+  const [{ count: finalStories }] = await sql`SELECT count(*)::int FROM stories WHERE expires_at > NOW()`
+  const [{ count: finalSaved }] = await sql`SELECT count(*)::int FROM saved_posts`
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
   console.log('\n📊 Seeding Complete Summary:')
-  console.log(`   - Users:   ${finalUsers.toLocaleString()}`)
-  console.log(`   - Posts:   ${finalPosts.toLocaleString()}`)
-  console.log(`   - Likes:   ${finalLikes.toLocaleString()}`)
-  console.log(`   - Follows: ${finalFollows.toLocaleString()}`)
-  console.log(`   - Elapsed: ${elapsed}s`)
+  console.log(`   - Users:        ${finalUsers.toLocaleString()}`)
+  console.log(`   - Posts:        ${finalPosts.toLocaleString()}`)
+  console.log(`   - Likes:        ${finalLikes.toLocaleString()}`)
+  console.log(`   - Follows:      ${finalFollows.toLocaleString()}`)
+  console.log(`   - Comments:     ${finalComments.toLocaleString()}`)
+  console.log(`   - Active Stories: ${finalStories.toLocaleString()}`)
+  console.log(`   - Bookmarks:    ${finalSaved.toLocaleString()}`)
+  console.log(`   - Elapsed:      ${elapsed}s`)
 
   await sql.end()
 }

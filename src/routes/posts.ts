@@ -95,3 +95,155 @@ postsRoutes.post('/:id/like', async (c) => {
     return c.json({ error: 'Failed to like post', details: err.message }, 500)
   }
 })
+
+// Get Comments on Post (Keyset cursor paginated)
+postsRoutes.get('/:id/comments', async (c) => {
+  const postId = Number(c.req.param('id'))
+  if (isNaN(postId)) {
+    return c.json({ error: 'Invalid post ID' }, 400)
+  }
+
+  const cursor = c.req.query('cursor') ? Number(c.req.query('cursor')) : null
+  const limit = Math.min(Number(c.req.query('limit')) || 20, 50)
+
+  try {
+    let comments
+    if (cursor) {
+      comments = await sql`
+        SELECT 
+          c.id, 
+          c.post_id, 
+          c.content, 
+          c.created_at,
+          u.id as user_id, 
+          u.username, 
+          u.display_name, 
+          u.avatar_url
+        FROM comments c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.post_id = ${postId} AND c.id < ${cursor}
+        ORDER BY c.id DESC
+        LIMIT ${limit};
+      `
+    } else {
+      comments = await sql`
+        SELECT 
+          c.id, 
+          c.post_id, 
+          c.content, 
+          c.created_at,
+          u.id as user_id, 
+          u.username, 
+          u.display_name, 
+          u.avatar_url
+        FROM comments c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.post_id = ${postId}
+        ORDER BY c.id DESC
+        LIMIT ${limit};
+      `
+    }
+
+    const nextCursor = comments.length === limit ? comments[comments.length - 1].id : null
+
+    return c.json({
+      postId,
+      count: comments.length,
+      nextCursor,
+      comments,
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to fetch comments', details: err.message }, 500)
+  }
+})
+
+// Create Comment on Post
+postsRoutes.post('/:id/comments', async (c) => {
+  const postId = Number(c.req.param('id'))
+  if (isNaN(postId)) {
+    return c.json({ error: 'Invalid post ID' }, 400)
+  }
+
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const authHeader = c.req.header('authorization')
+    let userId = Number(body.userId) || 1
+
+    if (authHeader) {
+      const verified = verifyAuthToken(authHeader)
+      if (!verified) {
+        return c.json({ error: 'Unauthorized: Invalid authentication token' }, 401)
+      }
+      userId = verified.userId
+    }
+
+    const content = String(body.content || body.text || '').trim().slice(0, 500)
+    if (!content) {
+      return c.json({ error: 'Comment content cannot be empty' }, 400)
+    }
+
+    const [comment] = await sql.begin(async (tx) => {
+      const [newComment] = await tx`
+        INSERT INTO comments (post_id, user_id, content, created_at)
+        VALUES (${postId}, ${userId}, ${content}, NOW())
+        RETURNING id, post_id, user_id, content, created_at;
+      `
+
+      await tx`
+        UPDATE posts
+        SET comments_count = comments_count + 1
+        WHERE id = ${postId};
+      `
+
+      return [newComment]
+    })
+
+    return c.json({ success: true, comment }, 201)
+  } catch (err: any) {
+    return c.json({ error: 'Failed to create comment', details: err.message }, 500)
+  }
+})
+
+// Toggle Save / Bookmark Post
+postsRoutes.post('/:id/save', async (c) => {
+  const postId = Number(c.req.param('id'))
+  if (isNaN(postId)) {
+    return c.json({ error: 'Invalid post ID' }, 400)
+  }
+
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const authHeader = c.req.header('authorization')
+    let userId = Number(body.userId) || 1
+
+    if (authHeader) {
+      const verified = verifyAuthToken(authHeader)
+      if (!verified) {
+        return c.json({ error: 'Unauthorized: Invalid authentication token' }, 401)
+      }
+      userId = verified.userId
+    }
+
+    const [existing] = await sql`
+      SELECT 1 FROM saved_posts 
+      WHERE user_id = ${userId} AND post_id = ${postId};
+    `
+
+    if (existing) {
+      await sql`
+        DELETE FROM saved_posts 
+        WHERE user_id = ${userId} AND post_id = ${postId};
+      `
+      return c.json({ success: true, saved: false, message: 'Post removed from saved collection' })
+    } else {
+      await sql`
+        INSERT INTO saved_posts (user_id, post_id, created_at)
+        VALUES (${userId}, ${postId}, NOW())
+        ON CONFLICT DO NOTHING;
+      `
+      return c.json({ success: true, saved: true, message: 'Post saved successfully' })
+    }
+  } catch (err: any) {
+    return c.json({ error: 'Failed to toggle post bookmark', details: err.message }, 500)
+  }
+})

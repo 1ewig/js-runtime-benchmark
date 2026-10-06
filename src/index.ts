@@ -4,6 +4,8 @@ import { authRoutes } from './routes/auth'
 import { feedRoutes } from './routes/feed'
 import { usersRoutes } from './routes/users'
 import { postsRoutes } from './routes/posts'
+import { storiesRoutes } from './routes/stories'
+import { searchRoutes } from './routes/search'
 import { telemetryRoutes } from './routes/telemetry'
 import { apiTelemetry } from './telemetry'
 
@@ -25,10 +27,17 @@ app.get('/', (c) => {
       'GET  /api/feed/home?userId=<id>&cursor=<id>&limit=20',
       'GET  /api/feed/explore?cursor=<id>&limit=20',
       'GET  /api/feed?cursor=<id>&limit=20',
+      'GET  /api/stories/tray?userId=<id>',
+      'POST /api/stories',
       'GET  /api/users/:id',
+      'GET  /api/users/:id/saved?cursor=<id>&limit=20',
       'POST /api/users/:id/follow',
       'POST /api/posts',
       'POST /api/posts/:id/like',
+      'GET  /api/posts/:id/comments?cursor=<id>&limit=20',
+      'POST /api/posts/:id/comments',
+      'POST /api/posts/:id/save',
+      'GET  /api/search?q=<term>&type=users|posts|all',
     ],
   })
 })
@@ -61,6 +70,8 @@ app.route('/api/auth', authRoutes)
 app.route('/api/feed', feedRoutes)
 app.route('/api/users', usersRoutes)
 app.route('/api/posts', postsRoutes)
+app.route('/api/stories', storiesRoutes)
+app.route('/api/search', searchRoutes)
 app.route('/api/telemetry', telemetryRoutes)
 
 const port = Number(process.env.PORT) || 3000
@@ -70,3 +81,4 @@ export default {
   hostname: '0.0.0.0',
   fetch: app.fetch,
 }
+

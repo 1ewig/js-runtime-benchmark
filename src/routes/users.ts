@@ -125,3 +125,79 @@ usersRoutes.post('/:id/follow', async (c) => {
     return c.json({ error: 'Failed to update follow relationship', details: err.message }, 500)
   }
 })
+
+// User's Saved / Bookmarked Posts Grid (Keyset Cursor Paginated)
+usersRoutes.get('/:id/saved', async (c) => {
+  const userId = Number(c.req.param('id'))
+  if (isNaN(userId)) {
+    return c.json({ error: 'Invalid user ID' }, 400)
+  }
+
+  const authHeader = c.req.header('authorization')
+  if (authHeader) {
+    const verified = verifyAuthToken(authHeader)
+    if (!verified) {
+      return c.json({ error: 'Unauthorized: Invalid authentication token' }, 401)
+    }
+  }
+
+  const cursor = c.req.query('cursor') ? Number(c.req.query('cursor')) : null
+  const limit = Math.min(Number(c.req.query('limit')) || 20, 50)
+
+  try {
+    let saved
+    if (cursor) {
+      saved = await sql`
+        SELECT 
+          p.id, 
+          p.image_url, 
+          p.caption, 
+          p.likes_count, 
+          p.comments_count, 
+          p.created_at as post_created_at,
+          sp.created_at as saved_at,
+          u.id as author_id,
+          u.username as author_username,
+          u.avatar_url as author_avatar_url
+        FROM saved_posts sp
+        JOIN posts p ON sp.post_id = p.id
+        JOIN users u ON p.user_id = u.id
+        WHERE sp.user_id = ${userId} AND p.id < ${cursor}
+        ORDER BY p.id DESC
+        LIMIT ${limit};
+      `
+    } else {
+      saved = await sql`
+        SELECT 
+          p.id, 
+          p.image_url, 
+          p.caption, 
+          p.likes_count, 
+          p.comments_count, 
+          p.created_at as post_created_at,
+          sp.created_at as saved_at,
+          u.id as author_id,
+          u.username as author_username,
+          u.avatar_url as author_avatar_url
+        FROM saved_posts sp
+        JOIN posts p ON sp.post_id = p.id
+        JOIN users u ON p.user_id = u.id
+        WHERE sp.user_id = ${userId}
+        ORDER BY p.id DESC
+        LIMIT ${limit};
+      `
+    }
+
+    const nextCursor = saved.length === limit ? saved[saved.length - 1].id : null
+
+    return c.json({
+      userId,
+      count: saved.length,
+      nextCursor,
+      savedPosts: saved,
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to fetch saved posts', details: err.message }, 500)
+  }
+})
+
