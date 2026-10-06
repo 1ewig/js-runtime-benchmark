@@ -17,37 +17,36 @@ searchRoutes.get('/', async (c) => {
     const pattern = `${query.toLowerCase()}%`
     const containsPattern = `%${query.toLowerCase()}%`
 
-    let matchedUsers: any[] = []
-    let matchedPosts: any[] = []
+    const userQueryPromise = (type === 'users' || type === 'all')
+      ? sql`
+          SELECT id, username, display_name, avatar_url, followers_count, posts_count
+          FROM users
+          WHERE lower(username) LIKE ${pattern} OR lower(display_name) LIKE ${containsPattern}
+          ORDER BY followers_count DESC
+          LIMIT ${limit};
+        `
+      : Promise.resolve([])
 
-    if (type === 'users' || type === 'all') {
-      matchedUsers = await sql`
-        SELECT id, username, display_name, avatar_url, followers_count, posts_count
-        FROM users
-        WHERE lower(username) LIKE ${pattern} OR lower(display_name) LIKE ${containsPattern}
-        ORDER BY followers_count DESC
-        LIMIT ${limit};
-      `
-    }
+    const postQueryPromise = (type === 'posts' || type === 'all')
+      ? sql`
+          SELECT 
+            p.id, 
+            p.image_url, 
+            p.caption, 
+            p.likes_count, 
+            p.comments_count, 
+            p.created_at,
+            u.username, 
+            u.avatar_url
+          FROM posts p
+          JOIN users u ON p.user_id = u.id
+          WHERE lower(p.caption) LIKE ${containsPattern}
+          ORDER BY p.likes_count DESC
+          LIMIT ${limit};
+        `
+      : Promise.resolve([])
 
-    if (type === 'posts' || type === 'all') {
-      matchedPosts = await sql`
-        SELECT 
-          p.id, 
-          p.image_url, 
-          p.caption, 
-          p.likes_count, 
-          p.comments_count, 
-          p.created_at,
-          u.username, 
-          u.avatar_url
-        FROM posts p
-        JOIN users u ON p.user_id = u.id
-        WHERE lower(p.caption) LIKE ${containsPattern}
-        ORDER BY p.likes_count DESC
-        LIMIT ${limit};
-      `
-    }
+    const [matchedUsers, matchedPosts] = await Promise.all([userQueryPromise, postQueryPromise])
 
     return c.json({
       query,

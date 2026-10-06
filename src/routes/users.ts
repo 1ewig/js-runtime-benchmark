@@ -12,32 +12,33 @@ usersRoutes.get('/:id', async (c) => {
   }
 
   try {
-    const [user] = await sql`
-      SELECT 
-        id, 
-        username, 
-        display_name, 
-        avatar_url, 
-        bio, 
-        followers_count, 
-        following_count, 
-        posts_count, 
-        created_at
-      FROM users
-      WHERE id = ${userId};
-    `
+    const [[user], recentPosts] = await Promise.all([
+      sql`
+        SELECT 
+          id, 
+          username, 
+          display_name, 
+          avatar_url, 
+          bio, 
+          followers_count, 
+          following_count, 
+          posts_count, 
+          created_at
+        FROM users
+        WHERE id = ${userId};
+      `,
+      sql`
+        SELECT id, image_url, caption, likes_count, comments_count, created_at
+        FROM posts
+        WHERE user_id = ${userId}
+        ORDER BY id DESC
+        LIMIT 12;
+      `,
+    ])
 
     if (!user) {
       return c.json({ error: 'User not found' }, 404)
     }
-
-    const recentPosts = await sql`
-      SELECT id, image_url, caption, likes_count, comments_count, created_at
-      FROM posts
-      WHERE user_id = ${userId}
-      ORDER BY id DESC
-      LIMIT 12;
-    `
 
     return c.json({
       user,
@@ -76,49 +77,29 @@ usersRoutes.post('/:id/follow', async (c) => {
       return c.json({ error: 'Users cannot follow themselves' }, 400)
     }
 
-    // Check if already following
-    const [existing] = await sql`
-      SELECT 1 FROM follows 
-      WHERE follower_id = ${followerId} AND following_id = ${targetUserId};
+    // Try unfollow first without prior SELECT
+    const [deleted] = await sql`
+      DELETE FROM follows 
+      WHERE follower_id = ${followerId} AND following_id = ${targetUserId}
+      RETURNING following_id;
     `
 
-    if (existing) {
-      // Unfollow
-      await sql.begin(async (tx) => {
-        await tx`
-          DELETE FROM follows 
-          WHERE follower_id = ${followerId} AND following_id = ${targetUserId};
-        `
-        await tx`
-          UPDATE users 
-          SET followers_count = GREATEST(followers_count - 1, 0) 
-          WHERE id = ${targetUserId};
-        `
-        await tx`
-          UPDATE users 
-          SET following_count = GREATEST(following_count - 1, 0) 
-          WHERE id = ${followerId};
-        `
-      })
+    if (deleted) {
+      await Promise.all([
+        sql`UPDATE users SET followers_count = GREATEST(followers_count - 1, 0) WHERE id = ${targetUserId};`,
+        sql`UPDATE users SET following_count = GREATEST(following_count - 1, 0) WHERE id = ${followerId};`,
+      ])
       return c.json({ success: true, following: false, message: 'Unfollowed successfully' })
     } else {
-      // Follow
-      await sql.begin(async (tx) => {
-        await tx`
-          INSERT INTO follows (follower_id, following_id, created_at)
-          VALUES (${followerId}, ${targetUserId}, NOW());
-        `
-        await tx`
-          UPDATE users 
-          SET followers_count = followers_count + 1 
-          WHERE id = ${targetUserId};
-        `
-        await tx`
-          UPDATE users 
-          SET following_count = following_count + 1 
-          WHERE id = ${followerId};
-        `
-      })
+      await sql`
+        INSERT INTO follows (follower_id, following_id, created_at)
+        VALUES (${followerId}, ${targetUserId}, NOW())
+        ON CONFLICT DO NOTHING;
+      `
+      await Promise.all([
+        sql`UPDATE users SET followers_count = followers_count + 1 WHERE id = ${targetUserId};`,
+        sql`UPDATE users SET following_count = following_count + 1 WHERE id = ${followerId};`,
+      ])
       return c.json({ success: true, following: true, message: 'Followed successfully' })
     }
   } catch (err: any) {

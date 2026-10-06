@@ -7,6 +7,7 @@
     "lint:fix": "oxlint --fix src scripts loadgen",
     "loadgen": "bun run loadgen/index.ts",
     "test:endpoints": "bun run scripts/test-endpoints.ts",
+    "warmup": "bun run scripts/warmup.ts",
     "seed": "bun run scripts/seed.ts",
     "migrate": "bun run scripts/migrate.ts"
   },

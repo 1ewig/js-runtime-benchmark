@@ -26,21 +26,19 @@ postsRoutes.post('/', async (c) => {
     const postCaption = String(body.caption || body.content || '').slice(0, 1000)
     const postImage = body.imageUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800'
 
-    const [newPost] = await sql.begin(async (tx) => {
-      const [p] = await tx`
+    const [newPost] = await sql`
+      WITH ins AS (
         INSERT INTO posts (user_id, image_url, caption, content, likes_count, comments_count, created_at)
         VALUES (${Number(userId)}, ${postImage}, ${postCaption}, ${postCaption.slice(0, 500)}, 0, 0, NOW())
-        RETURNING id, user_id, image_url, caption, likes_count, comments_count, created_at;
-      `
-
-      await tx`
+        RETURNING id, user_id, image_url, caption, likes_count, comments_count, created_at
+      ),
+      upd AS (
         UPDATE users 
         SET posts_count = posts_count + 1 
-        WHERE id = ${Number(userId)};
-      `
-
-      return [p]
-    })
+        WHERE id = ${Number(userId)}
+      )
+      SELECT * FROM ins;
+    `
 
     return c.json({ success: true, post: newPost }, 201)
   } catch (err: any) {
@@ -68,29 +66,36 @@ postsRoutes.post('/:id/like', async (c) => {
       userId = verified.userId
     }
 
-    const result = await sql.begin(async (tx) => {
-      const inserted = await tx`
+    const [result] = await sql`
+      WITH ins AS (
         INSERT INTO likes (user_id, post_id, created_at)
         VALUES (${userId}, ${postId}, NOW())
         ON CONFLICT (user_id, post_id) DO NOTHING
-        RETURNING id;
-      `
+        RETURNING post_id
+      ),
+      upd AS (
+        UPDATE posts
+        SET likes_count = likes_count + 1
+        WHERE id IN (SELECT post_id FROM ins)
+        RETURNING likes_count
+      )
+      SELECT 
+        EXISTS(SELECT 1 FROM ins) AS liked,
+        COALESCE(
+          (SELECT likes_count FROM upd),
+          (SELECT likes_count FROM posts WHERE id = ${postId})
+        ) AS likes_count;
+    `
 
-      if (inserted.length > 0) {
-        const [updatedPost] = await tx`
-          UPDATE posts
-          SET likes_count = likes_count + 1
-          WHERE id = ${postId}
-          RETURNING likes_count;
-        `
-        return { liked: true, likesCount: updatedPost?.likes_count || 1 }
-      }
+    const liked = Boolean(result?.liked)
+    const likesCount = Number(result?.likes_count || 0)
 
-      const [post] = await tx`SELECT likes_count FROM posts WHERE id = ${postId};`
-      return { liked: false, message: 'Already liked', likesCount: post?.likes_count || 0 }
+    return c.json({
+      success: true,
+      liked,
+      ...(liked ? {} : { message: 'Already liked' }),
+      likesCount,
     })
-
-    return c.json({ success: true, ...result })
   } catch (err: any) {
     return c.json({ error: 'Failed to like post', details: err.message }, 500)
   }
@@ -182,21 +187,19 @@ postsRoutes.post('/:id/comments', async (c) => {
       return c.json({ error: 'Comment content cannot be empty' }, 400)
     }
 
-    const [comment] = await sql.begin(async (tx) => {
-      const [newComment] = await tx`
+    const [comment] = await sql`
+      WITH ins AS (
         INSERT INTO comments (post_id, user_id, content, created_at)
         VALUES (${postId}, ${userId}, ${content}, NOW())
-        RETURNING id, post_id, user_id, content, created_at;
-      `
-
-      await tx`
+        RETURNING id, post_id, user_id, content, created_at
+      ),
+      upd AS (
         UPDATE posts
         SET comments_count = comments_count + 1
-        WHERE id = ${postId};
-      `
-
-      return [newComment]
-    })
+        WHERE id = ${postId}
+      )
+      SELECT * FROM ins;
+    `
 
     return c.json({ success: true, comment }, 201)
   } catch (err: any) {
@@ -224,16 +227,13 @@ postsRoutes.post('/:id/save', async (c) => {
       userId = verified.userId
     }
 
-    const [existing] = await sql`
-      SELECT 1 FROM saved_posts 
-      WHERE user_id = ${userId} AND post_id = ${postId};
+    const [deleted] = await sql`
+      DELETE FROM saved_posts 
+      WHERE user_id = ${userId} AND post_id = ${postId}
+      RETURNING post_id;
     `
 
-    if (existing) {
-      await sql`
-        DELETE FROM saved_posts 
-        WHERE user_id = ${userId} AND post_id = ${postId};
-      `
+    if (deleted) {
       return c.json({ success: true, saved: false, message: 'Post removed from saved collection' })
     } else {
       await sql`

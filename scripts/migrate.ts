@@ -119,6 +119,13 @@ async function migrate() {
   // Search lookup by username
   await sql`CREATE INDEX IF NOT EXISTS idx_users_username_lower ON users (lower(username));`
 
+  // GIN Trigram indexes for fast text search
+  await sql`CREATE EXTENSION IF NOT EXISTS pg_trgm;`
+  await sql`CREATE INDEX IF NOT EXISTS idx_posts_caption_trgm ON posts USING gin (lower(caption) gin_trgm_ops);`
+  await sql`CREATE INDEX IF NOT EXISTS idx_users_display_name_trgm ON users USING gin (lower(display_name) gin_trgm_ops);`
+  await sql`CREATE INDEX IF NOT EXISTS idx_users_username_trgm ON users USING gin (lower(username) gin_trgm_ops);`
+  await sql`CREATE INDEX IF NOT EXISTS idx_stories_user_created ON stories (user_id, created_at DESC);`
+
   console.log('✅ Instagram schema & index migrations completed successfully.')
   await sql.end()
 }
