@@ -6,6 +6,8 @@
     "lint": "oxlint src scripts",
     "lint:fix": "oxlint --fix src scripts",
     "test:endpoints": "bun run scripts/test-endpoints.ts",
+    "bench:internal": "bun run scripts/bench-internal.ts",
+    "loadtest": "bun run scripts/load-test.ts",
     "seed": "bun run scripts/seed.ts",
     "migrate": "bun run scripts/migrate.ts"
   },
@@ -14,7 +16,9 @@
     "postgres": "^3.4.9"
   },
   "devDependencies": {
+    "@types/autocannon": "^7.12.7",
     "@types/bun": "^1.4.2",
+    "autocannon": "^8.0.0",
     "oxlint": "^1.87.0",
     "typescript": "^7.0.2"
   }

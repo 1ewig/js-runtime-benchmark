@@ -12,3 +12,5 @@ node_modules/
 .insta/observe/
 .insta/audit.jsonl
 
+*.tsbuildinfo
+
