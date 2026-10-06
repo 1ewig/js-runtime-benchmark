@@ -6,13 +6,13 @@ async function testAll() {
   // 1. Health
   console.log('1️⃣ GET /health')
   const hRes = await fetch(`${baseUrl}/health`)
-  const hJson = await hRes.json()
+  const hJson: any = await hRes.json()
   console.log('Status:', hRes.status, hJson)
 
   // 2. Feed
   console.log('\n2️⃣ GET /api/feed?limit=3')
   const fRes = await fetch(`${baseUrl}/api/feed?limit=3`)
-  const fJson = await fRes.json()
+  const fJson: any = await fRes.json()
   console.log('Status:', fRes.status, `Posts received: ${fJson.count}, nextCursor: ${fJson.nextCursor}`)
   if (fJson.posts && fJson.posts.length > 0) {
     console.log('Sample post:', fJson.posts[0])
@@ -21,7 +21,7 @@ async function testAll() {
   // 3. User profile
   console.log('\n3️⃣ GET /api/users/1')
   const uRes = await fetch(`${baseUrl}/api/users/1`)
-  const uJson = await uRes.json()
+  const uJson: any = await uRes.json()
   console.log('Status:', uRes.status, uJson.user)
 
   // 4. Create post
@@ -31,7 +31,7 @@ async function testAll() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId: 1, content: 'Live test post from Bun script!' }),
   })
-  const pJson = await pRes.json()
+  const pJson: any = await pRes.json()
   console.log('Status:', pRes.status, pJson)
 
   // 5. Like post
@@ -42,7 +42,7 @@ async function testAll() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId: 2 }),
   })
-  const lJson = await lRes.json()
+  const lJson: any = await lRes.json()
   console.log('Status:', lRes.status, lJson)
 
   console.log('\n🎉 ALL LIVE ENDPOINTS VERIFIED SUCCESSFULLY!')

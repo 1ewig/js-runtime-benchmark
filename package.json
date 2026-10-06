@@ -1,6 +1,21 @@
 {
+  "name": "instacloud-benchmark",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src scripts",
+    "lint:fix": "oxlint --fix src scripts",
+    "test:endpoints": "bun run scripts/test-endpoints.ts",
+    "seed": "bun run scripts/seed.ts",
+    "migrate": "bun run scripts/migrate.ts"
+  },
   "dependencies": {
     "hono": "^4.13.13",
     "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "oxlint": "^1.87.0",
+    "typescript": "^7.0.2"
   }
 }

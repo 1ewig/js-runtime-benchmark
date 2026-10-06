@@ -10,6 +10,7 @@ app.get('/', (c) => {
     runtime: 'Bun ' + Bun.version,
     endpoints: [
       'GET /health',
+      'GET /api/bench/feed',
       'GET /api/feed?cursor=<id>&limit=20',
       'GET /api/users/:id',
       'POST /api/posts',
@@ -17,6 +18,29 @@ app.get('/', (c) => {
     ],
   })
 })
+
+// Pre-generate in-memory cached feed for pure compute/runtime benchmarking
+const inMemoryFeed = Array.from({ length: 20 }, (_, i) => ({
+  id: 100000 + i,
+  content: `Benchmarking Bun 1.4 (Rust core) on InstaCloud 4 vCPU / 4 GB microVM! Post #${i + 1} ⚡`,
+  likes_count: 42 + i * 3,
+  created_at: new Date(Date.now() - i * 60000).toISOString(),
+  user_id: 100 + i,
+  username: `rust_dev_${i + 1}`,
+  display_name: `Rustacean #${i + 1}`,
+  avatar_url: `https://api.dicebear.com/7.x/identicon/svg?seed=rust_${i}`,
+}))
+
+// Pure In-Memory / Compute Benchmark Endpoint (No DB I/O)
+app.get('/api/bench/feed', (c) => {
+  return c.json({
+    cached: true,
+    engine: 'Bun ' + Bun.version,
+    count: inMemoryFeed.length,
+    posts: inMemoryFeed,
+  })
+})
+
 
 // Observability & DB Ping
 app.get('/health', async (c) => {
