@@ -67,36 +67,42 @@ The database is migrated and pre-seeded with realistic social media data:
 
 ---
 
-## 📊 Stress Test & Benchmark Results
+## 📊 Stress Test & Benchmark Results (2 vCPU / 2 GB MicroVM)
 
-### Benchmark 1: Pure In-Memory Runtime Ceiling (Bun 1.4.2 Rust + Hono)
-Executed directly inside the 2 vCPU container via `insta compute exec` (0ms network overhead):
+Executed directly inside the 2 vCPU microVM via `insta compute exec` (0ms network delay) to reveal true hardware capacity:
 
-```
-⚡ Sustained Throughput:   70,986 requests/sec
-📦 Completed in 10s:       709,895 requests
-❌ Failed Requests:        0 (100% success)
-⏱️ Median Latency (p50):    0.57 ms (< 1 millisecond)
-⏱️ 99th Percentile (p99):  1.69 ms
-💾 Memory Consumption:     52 MB RAM (out of 2 GB available!)
-```
+### 1. Pure In-Memory Runtime Ceiling (`/api/bench/feed`)
+* **⚡ Sustained Throughput:** **60,754 requests/sec**
+* **📦 Completed in 10s:** 607,568 requests (0 failures)
+* **⏱️ Latency:** p50: **0.67 ms**, p90: **1.25 ms**, p99: **1.91 ms**
+* **💾 Memory Consumption:** **47 MB RSS** (out of 2,048 MB available)
 
-### Benchmark 2: Full-Stack with PostgreSQL 16 (`/api/feed` JOINs)
-Querying 50,000 posts joined with users across the internal datacenter network:
+### 2. User Profile Grid (`/api/users/:id`)
+* **⚡ Sustained Throughput:** **6,510 requests/sec**
+* **📦 Completed in 10s:** 65,120 queries (0 failures)
+* **⏱️ Latency:** p50: **4.23 ms**, p90: **6.15 ms**, p99: **10.16 ms**
+* **💾 Memory Consumption:** **41 MB RSS**
 
-```
-⚡ Sustained Throughput:   5,923 requests/sec
-📦 Completed in 10s:       59,253 queries
-❌ Failed Requests:        0
-⏱️ Median Latency (p50):    3.73 ms
-⏱️ 99th Percentile (p99):  8.27 ms
-💾 Memory Consumption:     43 MB RAM
-```
+### 3. Explore Discovery Feed (`/api/feed/explore`)
+Querying 50,000 posts indexed by engagement (`likes_count DESC, id DESC`) joined with users:
+* **⚡ Sustained Throughput:** **5,733 requests/sec**
+* **📦 Completed in 10s:** 57,353 queries (0 failures)
+* **⏱️ Latency:** p50: **4.95 ms**, p90: **7.89 ms**, p99: **13.15 ms**
+* **💾 Memory Consumption:** **43 MB RSS**
 
-### 💡 Key Takeaway on Concurrency Capacity
-* At **~6,000 database requests/sec**, this free-tier 2 vCPU / 2 GB setup supports **60,000 to 90,000 concurrently active browsing users** (assuming average click interval of 10–15s).
-* With an in-memory or Redis caching layer on top of Bun, the same container can easily absorb **500,000+ active users**.
-* Note on external testing: Running load tests from residential broadband across 7,000 miles (e.g. Asia to US-East) reflects home ISP Wi-Fi packet latency (~250ms RTT), not server capacity. Datacenter-local execution reveals true hardware throughput.
+### 4. Home Timeline (`/api/feed/home?userId=1`)
+Querying relational subquery traversing 150,000 follow connections + 50,000 posts:
+* **⚡ Sustained Throughput:** **4,211 requests/sec**
+* **📦 Completed in 10s:** 42,129 queries (0 failures)
+* **⏱️ Latency:** p50: **5.19 ms**, p90: **11.78 ms**, p99: **37.97 ms**
+* **💾 Memory Consumption:** **44 MB RSS**
+
+---
+
+### 💡 Key Takeaway on Concurrency & Active Users
+* **Database Workloads (4,200 – 6,500 req/s):** Supports **42,000 to 65,000 concurrently active browsing users** on this free 2 vCPU / 2 GB microVM (assuming average user click interval of 10s).
+* **Pure Compute Ceiling (60,754 req/s):** With an in-memory micro-cache (e.g. 2s TTL) on the Explore feed, this exact 2 vCPU setup can easily absorb **600,000+ active users**.
+* **RAM Efficiency:** Across all stress tests, memory hovered between **41 MB and 47 MB**, utilizing less than **2.5% of the 2 GB memory allocation**.
 
 ---
 
