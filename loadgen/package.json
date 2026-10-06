@@ -1,0 +1,13 @@
+{
+  "name": "instacloud-loadgen",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "bun run index.ts"
+  },
+  "dependencies": {
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2"
+  }
+}

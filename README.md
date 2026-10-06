@@ -99,10 +99,23 @@ Querying relational subquery traversing 150,000 follow connections + 50,000 post
 
 ---
 
-### 💡 Key Takeaway on Concurrency & Active Users
-* **Database Workloads (4,200 – 6,500 req/s):** Supports **42,000 to 65,000 concurrently active browsing users** on this free 2 vCPU / 2 GB microVM (assuming average user click interval of 10s).
-* **Pure Compute Ceiling (60,754 req/s):** With an in-memory micro-cache (e.g. 2s TTL) on the Explore feed, this exact 2 vCPU setup can easily absorb **600,000+ active users**.
-* **RAM Efficiency:** Across all stress tests, memory hovered between **41 MB and 47 MB**, utilizing less than **2.5% of the 2 GB memory allocation**.
+### 5. Distributed Realistic User Journey Benchmark (`loadgen` -> `api`)
+Simulating full human mobile app journeys (Home timeline scrolling 55%, Explore discovery 25%, Profile grid 12%, Double-tap likes 6%, Follows 2%) executed from the dedicated `loadgen` microVM over the datacenter network:
+
+| Virtual Users | Sustained RPS | 10s Total Requests | Success Rate | Median Latency (p50) | p90 Latency | p99 Latency | Equivalent Active Human Capacity |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **100 Users** | **733 req/s** | 7,437 | 100% | **33.17 ms** | 48.07 ms | 199.22 ms | **7,300 active users** |
+| **300 Users** | **2,221 req/s** | 22,560 | 100% | **31.88 ms** | 47.21 ms | 96.82 ms | **22,200 active users** |
+| **600 Users** | **4,108 req/s** | 42,208 | 100% | **37.07 ms** | 66.42 ms | 176.85 ms | **41,000 active users** |
+| **1,000 Users** | **5,495 req/s** | 56,307 | 100% | **67.20 ms** | 134.13 ms | 231.31 ms | **55,000 active users** |
+| **1,500 Users** | **5,236 req/s** | 53,756 | 100% | **165.34 ms** | 261.52 ms | 357.80 ms | **52,000 active users** |
+
+---
+
+### 💡 Key Takeaway on Concurrency & Capacity
+* **Saturation Point:** The 1 vCPU Bun server gracefully hits maximum throughput at **~5,500 requests/sec** under **1,000 to 1,500 simultaneous virtual users**.
+* **Zero Failure Rate:** Across all stress tests (**182,000+ total requests**), the system experienced **0 failed requests, 0 timeouts, and 0 dropped connections**.
+* **Real-World Capacity:** Supports **50,000 to 55,000 continuously active human browsing users** on a single 1 vCPU / 1 GB container without any caching!
 
 ---
 
