@@ -84,8 +84,13 @@ async function seed() {
   const startTime = Date.now()
   console.log('🌱 Starting comprehensive Instagram database seeding...')
 
+  // 0. Clean slate truncate
+  console.log('🧹 Wiping and resetting all tables with RESTART IDENTITY CASCADE...')
+  await sql`TRUNCATE TABLE users, posts, likes, follows, comments, stories, saved_posts RESTART IDENTITY CASCADE;`
+  console.log('✅ Clean slate ready.')
+
   // 1. Generate & Insert 5,000 Users
-  console.log('👥 Inserting / updating 5,000 users in batches...')
+  console.log('👥 Inserting 5,000 users in batches...')
   const USER_COUNT = 5000
   const USER_BATCH_SIZE = 1000
 
