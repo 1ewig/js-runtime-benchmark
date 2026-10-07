@@ -77,31 +77,51 @@ usersRoutes.post('/:id/follow', async (c) => {
       return c.json({ error: 'Users cannot follow themselves' }, 400)
     }
 
-    // Try unfollow first without prior SELECT
-    const [deleted] = await sql`
-      DELETE FROM follows 
-      WHERE follower_id = ${followerId} AND following_id = ${targetUserId}
-      RETURNING following_id;
+    // Try unfollow first in a single atomic CTE roundtrip
+    const [delResult] = await sql`
+      WITH del AS (
+        DELETE FROM follows 
+        WHERE follower_id = ${followerId} AND following_id = ${targetUserId}
+        RETURNING following_id
+      ),
+      upd_target AS (
+        UPDATE users 
+        SET followers_count = GREATEST(followers_count - 1, 0) 
+        WHERE id = ${targetUserId} AND EXISTS (SELECT 1 FROM del)
+      ),
+      upd_follower AS (
+        UPDATE users 
+        SET following_count = GREATEST(following_count - 1, 0) 
+        WHERE id = ${followerId} AND EXISTS (SELECT 1 FROM del)
+      )
+      SELECT EXISTS(SELECT 1 FROM del) AS unfollowed;
     `
 
-    if (deleted) {
-      await Promise.all([
-        sql`UPDATE users SET followers_count = GREATEST(followers_count - 1, 0) WHERE id = ${targetUserId};`,
-        sql`UPDATE users SET following_count = GREATEST(following_count - 1, 0) WHERE id = ${followerId};`,
-      ])
+    if (delResult?.unfollowed) {
       return c.json({ success: true, following: false, message: 'Unfollowed successfully' })
-    } else {
-      await sql`
+    }
+
+    // Follow in a single atomic CTE roundtrip
+    await sql`
+      WITH ins AS (
         INSERT INTO follows (follower_id, following_id, created_at)
         VALUES (${followerId}, ${targetUserId}, NOW())
-        ON CONFLICT DO NOTHING;
-      `
-      await Promise.all([
-        sql`UPDATE users SET followers_count = followers_count + 1 WHERE id = ${targetUserId};`,
-        sql`UPDATE users SET following_count = following_count + 1 WHERE id = ${followerId};`,
-      ])
-      return c.json({ success: true, following: true, message: 'Followed successfully' })
-    }
+        ON CONFLICT DO NOTHING
+        RETURNING following_id
+      ),
+      upd_target AS (
+        UPDATE users 
+        SET followers_count = followers_count + 1 
+        WHERE id = ${targetUserId} AND EXISTS (SELECT 1 FROM ins)
+      ),
+      upd_follower AS (
+        UPDATE users 
+        SET following_count = following_count + 1 
+        WHERE id = ${followerId} AND EXISTS (SELECT 1 FROM ins)
+      )
+      SELECT 1;
+    `
+    return c.json({ success: true, following: true, message: 'Followed successfully' })
   } catch (err: any) {
     return c.json({ error: 'Failed to update follow relationship', details: err.message }, 500)
   }

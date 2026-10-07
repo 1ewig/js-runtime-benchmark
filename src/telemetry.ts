@@ -41,23 +41,34 @@ function getLinuxCpuTicks(): { utime: number; stime: number } | null {
   return null
 }
 
+let detectedCpuSource: 'cgroup_v2' | 'cgroup_v1' | 'proc_stat' | 'process' = 'process'
+try {
+  if (fs.existsSync('/sys/fs/cgroup/cpu.stat')) {
+    detectedCpuSource = 'cgroup_v2'
+  } else if (fs.existsSync('/sys/fs/cgroup/cpuacct/cpuacct.usage')) {
+    detectedCpuSource = 'cgroup_v1'
+  } else if (fs.existsSync('/proc/self/stat')) {
+    detectedCpuSource = 'proc_stat'
+  }
+} catch {}
+
 function getProcessCpuMicros(): number {
   try {
-    if (fs.existsSync('/sys/fs/cgroup/cpu.stat')) {
+    if (detectedCpuSource === 'cgroup_v2') {
       const content = fs.readFileSync('/sys/fs/cgroup/cpu.stat', 'utf8')
       const m = content.match(/usage_usec\s+(\d+)/)
       if (m) return parseInt(m[1], 10)
-    }
-    if (fs.existsSync('/sys/fs/cgroup/cpuacct/cpuacct.usage')) {
+    } else if (detectedCpuSource === 'cgroup_v1') {
       const val = parseInt(fs.readFileSync('/sys/fs/cgroup/cpuacct/cpuacct.usage', 'utf8'), 10)
       if (!isNaN(val)) return Math.round(val / 1000)
+    } else if (detectedCpuSource === 'proc_stat') {
+      const linuxTicks = getLinuxCpuTicks()
+      if (linuxTicks) {
+        return (linuxTicks.utime + linuxTicks.stime) * 10000
+      }
     }
   } catch {}
 
-  const linuxTicks = getLinuxCpuTicks()
-  if (linuxTicks) {
-    return (linuxTicks.utime + linuxTicks.stime) * 10000
-  }
   const u = process.cpuUsage()
   return u.user + u.system
 }

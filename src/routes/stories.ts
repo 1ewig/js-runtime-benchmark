@@ -40,8 +40,9 @@ storiesRoutes.get('/tray', async (c) => {
     // Group stories by creator for native Instagram tray format
     const trayMap = new Map<number, any>()
     for (const story of stories) {
-      if (!trayMap.has(story.user_id)) {
-        trayMap.set(story.user_id, {
+      let entry = trayMap.get(story.user_id)
+      if (!entry) {
+        entry = {
           user: {
             id: story.user_id,
             username: story.username,
@@ -49,9 +50,10 @@ storiesRoutes.get('/tray', async (c) => {
             avatarUrl: story.avatar_url,
           },
           items: [],
-        })
+        }
+        trayMap.set(story.user_id, entry)
       }
-      trayMap.get(story.user_id).items.push({
+      entry.items.push({
         id: story.id,
         mediaUrl: story.media_url,
         createdAt: story.created_at,

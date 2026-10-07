@@ -95,6 +95,9 @@ if (cluster.isPrimary && numWorkers > 1) {
     port,
     hostname: '0.0.0.0',
     reusePort: true,
+    development: false,
+    maxRequestBodySize: 10 * 1024 * 1024,
+    idleTimeout: 30,
     fetch: app.fetch,
   })
 

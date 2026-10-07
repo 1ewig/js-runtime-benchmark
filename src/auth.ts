@@ -18,6 +18,9 @@ export function signAuthToken(userId: number, secret: string = AUTH_SECRET): str
   return `${payload}.${hmac}`
 }
 
+const verifiedTokenCache = new Map<string, { userId: number; expiresAt: number }>()
+const MAX_CACHE_SIZE = 10000
+
 /**
  * Verify a Bearer token with HMAC-SHA256 and constant-time equality check.
  * Returns decoded userId or null if invalid.
@@ -27,6 +30,16 @@ export function verifyAuthToken(authHeader?: string | null, secret: string = AUT
     return null
   }
   const token = authHeader.slice(7).trim()
+
+  // Fast path: check in-memory cache
+  const cached = verifiedTokenCache.get(token)
+  if (cached) {
+    if (Date.now() < cached.expiresAt) {
+      return { userId: cached.userId }
+    }
+    verifiedTokenCache.delete(token)
+  }
+
   const parts = token.split('.')
   if (parts.length !== 3) {
     return null
@@ -49,6 +62,11 @@ export function verifyAuthToken(authHeader?: string | null, secret: string = AUT
   }
 
   if (crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+    if (verifiedTokenCache.size >= MAX_CACHE_SIZE) {
+      verifiedTokenCache.clear()
+    }
+    // Cache valid token for 5 minutes
+    verifiedTokenCache.set(token, { userId, expiresAt: Date.now() + 300_000 })
     return { userId }
   }
 
