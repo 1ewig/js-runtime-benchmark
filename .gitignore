@@ -14,3 +14,9 @@ node_modules/
 
 *.tsbuildinfo
 
+# Generated deployment artifact
+Dockerfile
+
+# IDE / tool configurations
+.claude/
+.codex/

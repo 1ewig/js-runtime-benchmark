@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync } from 'node:fs'
+import { copyFileSync, existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 
@@ -43,6 +43,12 @@ const args = isWindows
 const proc = spawn(cmd, args, { stdio: 'inherit' })
 
 proc.on('close', (code) => {
+  try {
+    if (existsSync(dockerDest)) {
+      unlinkSync(dockerDest)
+    }
+  } catch {}
+
   if (code === 0) {
     console.log(`\n✨ [Deploy] Successfully deployed stack "${stack}" to InstaCloud group "${config.group}"!\n`)
   } else {
