@@ -11,12 +11,12 @@ This document serves as the operational manual for engineers and AI agents worki
 * **Project ID:** `bb8545e1-fc83-4d22-938c-b91f5661d06d`
 * **Default Branch:** `main`
 
-### Provisioned Services (2 vCPU / 2 GB RAM Tier)
+### Provisioned Services (1-2 vCPU / 1-2 GB MicroVM Tiers)
 
 | Service Name | Type | Specs / Plan | Purpose & Live Domain |
 | :--- | :--- | :--- | :--- |
-| **`api-bun-hono`** | Compute MicroVM | 2 vCPU / 2 GB RAM | Active reference backend API<br>`prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com` |
-| **`api-node-express`** | Compute MicroVM | 2 vCPU / 2 GB RAM | Stage 2 Node.js 26 + Express API<br>`prod-main-api-node-express-d91ff5-00q3502k1xe.compute.instacloud-edge.com` |
+| **`api-bun-hono`** | Compute MicroVM | 1-2 vCPU / 1-2 GB RAM | Reference Bun 1.4.3 + Hono API<br>`prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com` |
+| **`api-node-express`** | Compute MicroVM | 1-2 vCPU / 1-2 GB RAM | Stage 2 Node.js 26 + Express API<br>`prod-main-api-node-express-d91ff5-00q3502k1xe.compute.instacloud-edge.com` |
 | **`loadgen`** | Compute MicroVM | 2 vCPU / 2 GB RAM | Distributed realistic load generator<br>`prod-main-loadgen-e58fbb-00gzy05gj85.compute.instacloud-edge.com` |
 | **`db`** | Managed PostgreSQL 16 | 2 vCPU / 2 GB RAM, 10 GB SSD | High-concurrency relational store with GIN trigram indexes |
 
@@ -143,26 +143,38 @@ When testing any stack, follow this sequence:
 ### ✅ Stage 1: Bun 1.4.3 + Hono (Completed Reference Baseline)
 * **Runtime:** Bun 1.4.3 (Alpine Linux container)
 * **Framework:** Hono 4.13
-* **Performance:**
-  * **Throughput:** ~5,000 req/sec (99,603 requests completed in 20.2s)
-  * **Success Rate:** 100.0% (0 errors across 10 actions)
-  * **Median Latency (p50):** 78.02 ms
-  * **Average CPU:** 26.1% (0.52 cores — 74% headroom remaining)
-  * **Peak RSS RAM:** **79 MB (3.9% of 2 GB RAM)**
-  * **Event Loop Lag:** 0.16 ms avg / 0.30 ms p95
+* **Performance Results:**
+  * **Round 1 (2 vCPU / 2 GB RAM, 2 Clustered Workers):**
+    * Throughput: 4,929.8 req/sec (99,603 requests completed in 20.2s)
+    * Latency: 78.02 ms p50 / 127.39 ms p95 / 234.73 ms p99
+    * CPU Usage: 26.1% avg (0.52 cores — 74% headroom remaining)
+    * Peak RSS RAM: 79 MB (3.9% of 2 GB RAM)
+    * Event Loop Lag: 0.16 ms avg / 0.30 ms p95
+  * **Round 2 — The Knife Fight (1 vCPU / 1 GB RAM, 1 Dedicated Worker):**
+    * Throughput: 4,908.6 req/sec (99,205 requests completed in 20.2s)
+    * Latency: 81.50 ms p50 / 122.77 ms p95 / 179.83 ms p99
+    * CPU Usage: 73.7% avg (0.74 cores — 26.3% headroom remaining on single core)
+    * Peak RSS RAM: 85 MB (8.3% of 1 GB RAM)
+    * Event Loop Lag: 0.11 ms avg / 0.19 ms p95
 
 ---
 
 ### ✅ Stage 2: Node.js 26 (Latest) + Express (Completed)
 * **Runtime:** Node.js 26.11.1 (`node:current-alpine` container)
-* **Framework:** Express 5.3 with `node:cluster` (2 workers), disabled `etag` / `x-powered-by`
-* **Performance (1,000 VUs, 20s test against PostgreSQL 16):**
-  * **Throughput:** 5,018.3 req/sec (101,202 requests completed in 20.2s)
-  * **Success Rate:** 100.0% (0 errors across 10 actions)
-  * **Median Latency (p50):** 79.69 ms (p95: 113.82 ms, p99: 164.63 ms)
-  * **Average CPU:** 72.8% (1.46 cores — peak 100%)
-  * **Peak RSS RAM:** **165 MB (8.1% of 2 GB RAM)** (2.08x higher memory than Bun 1.4.3)
-  * **Event Loop Lag:** 0.46 ms avg / 2.89 ms p95 (9.6x higher event loop lag than Bun 1.4.3)
+* **Framework:** Express 5.3 with disabled `etag` / `x-powered-by`
+* **Performance Results:**
+  * **Round 1 (2 vCPU / 2 GB RAM, 2 Clustered Workers):**
+    * Throughput: 5,018.3 req/sec (101,202 requests completed in 20.2s)
+    * Latency: 79.69 ms p50 / 113.82 ms p95 / 164.63 ms p99
+    * CPU Usage: 72.8% avg (1.46 cores — peak 100%)
+    * Peak RSS RAM: 165 MB (8.1% of 2 GB RAM)
+    * Event Loop Lag: 0.46 ms avg / 2.89 ms p95
+  * **Round 2 — The Knife Fight (1 vCPU / 1 GB RAM, 1 Dedicated Worker):**
+    * Throughput: 4,419.2 req/sec (90,235 requests completed in 20.4s — dropped ~9,000 requests)
+    * Latency: 97.58 ms p50 / 132.75 ms p95 / 155.31 ms p99 (+16 ms slower median)
+    * CPU Usage: 96.2% avg (0.96 cores — pinned near 100% saturation)
+    * Peak RSS RAM: 178 MB (17.4% of 1 GB RAM)
+    * Event Loop Lag: 5.74 ms avg / 13.95 ms p95 (73x higher event loop starvation)
 
 ---
 
@@ -175,11 +187,11 @@ When testing any stack, follow this sequence:
 
 ---
 
-### ⏳ Stage 4: Node.js 22 LTS + Fastify
+### ⏳ Stage 4: Node.js 26 (Latest) + Fastify
 * **Goal:** Test the fastest framework in the Node.js ecosystem using schema compilation (`fast-json-stringify`).
 * **Architecture:**
-  * Base Image: `node:22-alpine`
-  * Framework: Fastify with `node:cluster` (2 workers).
+  * Base Image: `node:current-alpine`
+  * Framework: Fastify with single/clustered workers.
 * **Expected Hypothesis:** Significantly faster than Express, testing whether Node's V8 JIT can match Bun's Rust core when optimized.
 
 ---
