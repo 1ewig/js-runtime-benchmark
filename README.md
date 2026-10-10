@@ -2,6 +2,8 @@
 
 A high-performance social media backend prototype built with **Bun 1.4.3 (Rust Core)** and **Hono**, deployed on **InstaCloud** serverless microVMs and backed by **Managed PostgreSQL 16**.
 
+> 📖 **Developer & Agent Guide:** For InstaCloud CLI commands, lifecycle management, and the multi-stack benchmarking plan, see [`docs/INSTACLOUD_GUIDE.md`](docs/INSTACLOUD_GUIDE.md).
+
 ---
 
 ## 🏗️ Architecture & Infrastructure
