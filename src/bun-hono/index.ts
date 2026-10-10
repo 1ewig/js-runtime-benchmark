@@ -11,7 +11,7 @@ import { telemetryRoutes } from './routes/telemetry'
 import { apiTelemetry } from '../shared/telemetry'
 
 const port = Number(process.env.PORT) || 3000
-const numWorkers = Number(process.env.WEB_CONCURRENCY) || 2
+const numWorkers = Number(process.env.WEB_CONCURRENCY) || 1
 
 if (cluster.isPrimary && numWorkers > 1) {
   console.log(`🚀 [Cluster Primary ${process.pid}] Spawning ${numWorkers} Bun workers across microVM vCPUs...`)

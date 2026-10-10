@@ -112,8 +112,8 @@ class ApiTelemetryManager {
       const deltaMicros = currentCpuMicros - this.lastCpuMicros
       const elapsedMicros = elapsedMs * 1000
 
-      // System cores: 2 vCPUs
-      const cores = 2
+      // Configured vCPUs (defaults to 1 for 1 vCPU tier)
+      const cores = Number(process.env.VCPU_COUNT) || 1
       const rawPct = (deltaMicros / elapsedMicros) * 100
       const normalizedPct = Math.min(Math.max(rawPct / cores, 0), 100)
 
@@ -182,21 +182,24 @@ class ApiTelemetryManager {
       ? Number(sortedLag[sortedLag.length - 1].toFixed(2))
       : 0
 
+    const configuredCores = Number(process.env.VCPU_COUNT) || 1
+    const configuredRamMb = Number(process.env.MICROVM_RAM_MB) || 1024
+
     return {
       cpuUtilization: {
         peakCpuPct: Number(this.peakCpu.toFixed(1)),
         avgCpuPct: avgCpu,
         currentCpuPct: currentCpu,
-        coresConfigured: 2,
-        estimatedCoresUsed: Number(((avgCpu * 2) / 100).toFixed(2)),
+        coresConfigured: configuredCores,
+        estimatedCoresUsed: Number(((avgCpu * configuredCores) / 100).toFixed(2)),
       },
       memory: {
         peakRssMb: this.peakRss,
         avgRssMb: avgRss,
         currentRssMb: currentRss,
         peakHeapUsedMb: this.peakHeap,
-        totalMicroVmRamMb: 2048,
-        ramUsedPercent: Number(((this.peakRss / 2048) * 100).toFixed(1)),
+        totalMicroVmRamMb: configuredRamMb,
+        ramUsedPercent: Number(((this.peakRss / configuredRamMb) * 100).toFixed(1)),
       },
       serverEventLoopLagMs: {
         avg: avgLag,
