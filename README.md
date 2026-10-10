@@ -40,7 +40,7 @@ A high-performance social media backend prototype built with **Bun 1.4.3 (Rust C
   * `src/node-fastify/`: Scaffolding for Node.js 22 + Fastify stack.
 * **Container Packaging:** Multi-stage Docker builds isolating production dependencies (`oven/bun:1.4.3-alpine`) and running under unprivileged non-root user `bun`.
 * **Type System & Quality:**
-  * **TypeScript 7** (`tsc --noEmit`)
+  * **TypeScript 7** (Native `bun check` runs in <250ms, with fallback `tsc --noEmit`)
   * **Oxlint v1.87** — blazingly fast Rust-based linter (runs in <20ms).
 
 ---
@@ -158,7 +158,7 @@ Simulating full human mobile app journeys with **HMAC-SHA256 Token Authenticatio
 
 ### Routine Scripts
 ```bash
-# Typecheck with TypeScript
+# Typecheck with native Bun (runs in <250ms)
 bun run typecheck
 
 # Lint with Oxlint
