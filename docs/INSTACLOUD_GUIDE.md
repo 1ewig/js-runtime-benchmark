@@ -11,14 +11,16 @@ This document serves as the operational manual for engineers and AI agents worki
 * **Project ID:** `bb8545e1-fc83-4d22-938c-b91f5661d06d`
 * **Default Branch:** `main`
 
-### Provisioned Services (1-2 vCPU / 1-2 GB MicroVM Tiers)
+### Provisioned Services (1 vCPU / 1 GB API MicroVM Tier)
 
 | Service Name | Type | Specs / Plan | Purpose & Live Domain |
 | :--- | :--- | :--- | :--- |
-| **`api-bun-hono`** | Compute MicroVM | 1-2 vCPU / 1-2 GB RAM | Reference Bun 1.4.3 + Hono API<br>`prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com` |
-| **`api-node-express`** | Compute MicroVM | 1-2 vCPU / 1-2 GB RAM | Stage 2 Node.js 26 + Express API<br>`prod-main-api-node-express-d91ff5-00q3502k1xe.compute.instacloud-edge.com` |
+| **`api-bun-hono`** | Compute MicroVM | 1 vCPU / 1 GB RAM | Reference Bun 1.4.3 + Hono API<br>`prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com` |
+| **`api-node-express`** | Compute MicroVM | 1 vCPU / 1 GB RAM | Stage 2 Node.js 26 + Express API<br>`prod-main-api-node-express-d91ff5-00q3502k1xe.compute.instacloud-edge.com` |
 | **`loadgen`** | Compute MicroVM | 2 vCPU / 2 GB RAM | Distributed realistic load generator<br>`prod-main-loadgen-e58fbb-00gzy05gj85.compute.instacloud-edge.com` |
 | **`db`** | Managed PostgreSQL 16 | 2 vCPU / 2 GB RAM, 10 GB SSD | High-concurrency relational store with GIN trigram indexes |
+
+> Both API microVMs are pinned to the **1 vCPU / 1 GB** tier via `VCPU_COUNT=1`, `MICROVM_RAM_MB=1024` and `WEB_CONCURRENCY=1` in their Dockerfiles. The generator and database sit at 2 vCPU / 2 GB, so the measured application is the smallest resource in the request path.
 
 ---
 
@@ -108,8 +110,8 @@ src/
 │   └── index.ts         # Multi-core clustering with Bun.serve({ reusePort: true })
 │
 ├── bun-elysia/          # [Upcoming] Bun 1.4.3 + Elysia
-├── node-express/        # [Upcoming] Node.js 22 LTS + Express
-├── node-fastify/        # [Upcoming] Node.js 22 LTS + Fastify
+├── node-express/        # [Completed] Node.js 26 + Express
+├── node-fastify/        # [Upcoming] Node.js 26 + Fastify
 └── index.ts             # Dynamic entrypoint (STACK=bun-hono by default)
 
 docker/
@@ -143,38 +145,31 @@ When testing any stack, follow this sequence:
 ### ✅ Stage 1: Bun 1.4.3 + Hono (Completed Reference Baseline)
 * **Runtime:** Bun 1.4.3 (Alpine Linux container)
 * **Framework:** Hono 4.13
-* **Performance Results:**
-  * **Round 1 (2 vCPU / 2 GB RAM, 2 Clustered Workers):**
-    * Throughput: 4,929.8 req/sec (99,603 requests completed in 20.2s)
-    * Latency: 78.02 ms p50 / 127.39 ms p95 / 234.73 ms p99
-    * CPU Usage: 26.1% avg (0.52 cores — 74% headroom remaining)
-    * Peak RSS RAM: 79 MB (3.9% of 2 GB RAM)
-    * Event Loop Lag: 0.16 ms avg / 0.30 ms p95
-  * **Round 2 — The Knife Fight (1 vCPU / 1 GB RAM, 1 Dedicated Worker):**
-    * Throughput: 4,908.6 req/sec (99,205 requests completed in 20.2s)
-    * Latency: 81.50 ms p50 / 122.77 ms p95 / 179.83 ms p99
-    * CPU Usage: 73.7% avg (0.74 cores — 26.3% headroom remaining on single core)
-    * Peak RSS RAM: 85 MB (8.3% of 1 GB RAM)
-    * Event Loop Lag: 0.11 ms avg / 0.19 ms p95
+* **Tier:** 1 vCPU / 1 GB RAM, 1 dedicated worker (`WEB_CONCURRENCY=1`)
+* **Performance (1,000 VUs, 100 ms think time, warm environment):**
+  * Throughput: **5,451.3 req/sec** (109,907 requests in 20.2s)
+  * Latency: 57.62 ms p50 / 76.37 ms p75 / 96.29 ms p95 / 123.77 ms p99
+  * CPU Usage: **79.5% avg** (0.80 cores — ~20% average headroom)
+  * Peak RSS RAM: **87 MB (8.5% of 1 GB)**
+  * Event Loop Lag: 0.45 ms avg / 2.97 ms p95
+  * Success Rate: 100.0% (0 errors)
+* **Generator control:** loadgen loop lag 0.53 ms avg / 1.16 ms p95, cadence delay 0 ms, `healthy: true` — not generator-bound.
 
 ---
 
 ### ✅ Stage 2: Node.js 26 (Latest) + Express (Completed)
 * **Runtime:** Node.js 26.11.1 (`node:current-alpine` container)
 * **Framework:** Express 5.3 with disabled `etag` / `x-powered-by`
-* **Performance Results:**
-  * **Round 1 (2 vCPU / 2 GB RAM, 2 Clustered Workers):**
-    * Throughput: 5,018.3 req/sec (101,202 requests completed in 20.2s)
-    * Latency: 79.69 ms p50 / 113.82 ms p95 / 164.63 ms p99
-    * CPU Usage: 72.8% avg (1.46 cores — peak 100%)
-    * Peak RSS RAM: 165 MB (8.1% of 2 GB RAM)
-    * Event Loop Lag: 0.46 ms avg / 2.89 ms p95
-  * **Round 2 — The Knife Fight (1 vCPU / 1 GB RAM, 1 Dedicated Worker):**
-    * Throughput: 4,419.2 req/sec (90,235 requests completed in 20.4s — dropped ~9,000 requests)
-    * Latency: 97.58 ms p50 / 132.75 ms p95 / 155.31 ms p99 (+16 ms slower median)
-    * CPU Usage: 96.2% avg (0.96 cores — pinned near 100% saturation)
-    * Peak RSS RAM: 178 MB (17.4% of 1 GB RAM)
-    * Event Loop Lag: 5.74 ms avg / 13.95 ms p95 (73x higher event loop starvation)
+* **Tier:** 1 vCPU / 1 GB RAM, 1 dedicated worker (`WEB_CONCURRENCY=1`)
+* **Performance (1,000 VUs, 100 ms think time, warm environment):**
+  * Throughput: **4,361.7 req/sec** (88,624 requests in 20.3s)
+  * Latency: 101.76 ms p50 / 114.31 ms p75 / 139.26 ms p95 / 192.19 ms p99
+  * CPU Usage: **98.4% avg** (0.98 cores — single core effectively pinned)
+  * Peak RSS RAM: **178 MB (17.4% of 1 GB)**
+  * Event Loop Lag: 5.87 ms avg / 15.59 ms p95
+  * Success Rate: 100.0% (0 errors)
+* **Generator control:** loadgen loop lag 0.42–0.45 ms avg / 1.04 ms p95, cadence delay 0 ms, `healthy: true` — not generator-bound.
+* **Variance note:** two runs produced 4,144.6 and 4,361.7 req/sec (~5% spread). The throughput delta against Bun should be read as ~20–25%, not an exact figure.
 
 ---
 
@@ -213,4 +208,4 @@ When testing any stack, follow this sequence:
 2. **Never Edit Root `Dockerfile` Directly:**
    * Root `Dockerfile` is git-ignored and automatically generated/cleaned by `scripts/deploy.ts`. Edit templates inside `docker/Dockerfile.<stack>`.
 3. **Database Connection Pool Sizing:**
-   * The managed database supports ~100 concurrent pooled connections. Each clustered microVM worker must be capped at `max: 25` (2 workers × 25 = 50 connections) to leave headroom for loadgen and admin tasks.
+   * The managed database supports ~100 concurrent pooled connections, and observed peak usage under full load is only **24**. Each microVM worker is capped at `max: 25`; with `WEB_CONCURRENCY=1` that is 25 connections total. Leave headroom for loadgen and admin tasks.

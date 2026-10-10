@@ -16,25 +16,27 @@ A high-performance social media backend prototype built with **Bun 1.4.3 (Rust C
   * **Node.js 26 + Express:** `https://prod-main-api-node-express-d91ff5-00q3502k1xe.compute.instacloud-edge.com`
   * **Distributed Loadgen:** `https://prod-main-loadgen-e58fbb-00gzy05gj85.compute.instacloud-edge.com`
 
-### Provisioned Services (Configured for 1-2 vCPU / 1-2 GB MicroVM Tiers)
+### Provisioned Services (1 vCPU / 1 GB API MicroVM Tier)
 
 | Service | Type | Specs / Limits | Purpose |
 | :--- | :--- | :--- | :--- |
-| **`api-bun-hono`** | Compute (MicroVM) | 1-2 vCPU / 1-2 GB RAM | Reference Bun 1.4.3 + Hono HTTP server |
-| **`api-node-express`** | Compute (MicroVM) | 1-2 vCPU / 1-2 GB RAM | Clustered Node.js 26.11 (Latest) + Express 5 server |
+| **`api-bun-hono`** | Compute (MicroVM) | 1 vCPU / 1 GB RAM | Reference Bun 1.4.3 + Hono HTTP server |
+| **`api-node-express`** | Compute (MicroVM) | 1 vCPU / 1 GB RAM | Node.js 26.11 (Latest) + Express 5 server |
 | **`loadgen`** | Compute (MicroVM) | 2 vCPU / 2 GB RAM | Dedicated distributed realistic load generator |
 | **`db`** | PostgreSQL 16 | 2 vCPU / 2 GB RAM, 10 GB Storage | Managed relational database (`us-east-1`) |
+
+> Both API microVMs are pinned to the **1 vCPU / 1 GB** tier with `VCPU_COUNT=1`, `MICROVM_RAM_MB=1024` and `WEB_CONCURRENCY=1`. The generator and the database run at 2 vCPU / 2 GB, so the measured applications are deliberately the smallest resource in the path.
 
 ---
 
 ## 📦 Technology Stack & Runtime Optimizations
 
 * **Runtime:** [Bun v1.4.3](https://bun.sh) (Linux x64 container / Windows local development) — built on Bun's rewritten **Rust core** with upgraded JavaScriptCore (JSC) engine and ultra-lean memory allocator.
-* **Concurrency Model:** Multi-process worker clustering via `node:cluster` with `Bun.serve({ reusePort: true })` saturating all 2 vCPUs under Linux kernel `SO_REUSEPORT` socket distribution.
+* **Concurrency Model:** Single dedicated worker process per microVM (`WEB_CONCURRENCY=1`) on the 1 vCPU / 1 GB tier — no cluster IPC and no `SO_REUSEPORT` socket distribution, so measurements are pure single-core behaviour.
 * **Framework:** [Hono v4.13](https://hono.dev) — ultra-fast, lightweight web framework.
 * **Cryptography:** Native Zig/BoringSSL `Bun.CryptoHasher('sha256')` for Bearer token verification with constant-time validation (`crypto.timingSafeEqual`) and fast in-memory token cache.
 * **Database Driver:** [`postgres.js v3.4`](https://github.com/porsager/postgres) with tuned connection pooling:
-  * Pool Size: Balanced per clustered worker (`max: 25` per worker, 50 total)
+  * Pool Size: `max: 25` (single worker — 25 connections total)
   * Idle Timeout: `20s`
   * Prepared Statements: `true`
   * Write Execution: Atomic single-roundtrip Common Table Expressions (CTEs)
@@ -43,7 +45,7 @@ A high-performance social media backend prototype built with **Bun 1.4.3 (Rust C
   * `src/bun-hono/`: Production Bun 1.4.3 + Hono implementation.
   * `src/bun-elysia/`: Scaffolding for Bun + Elysia stack.
   * `src/node-express/`: Production Node.js 26.11 (Latest) + Express 5 implementation.
-  * `src/node-fastify/`: Scaffolding for Node.js 22 + Fastify stack.
+  * `src/node-fastify/`: Scaffolding for Node.js 26 + Fastify stack.
 * **Container Packaging:** Multi-stage Docker builds isolating production dependencies (`oven/bun:1.4.3-alpine`) and running under unprivileged non-root user `bun`.
 * **Type System & Quality:**
   * **TypeScript 7** (Native `bun check` runs in <250ms, with fallback `tsc --noEmit`)
@@ -101,76 +103,105 @@ The database is migrated and pre-seeded with realistic Instagram-scale data:
 
 ---
 
-## 📊 Multi-Stack Benchmark Results (1,000 Virtual Users Against PostgreSQL 16)
+## 📊 Benchmark Results — 1 vCPU / 1 GB MicroVM Tier (1 Dedicated Worker)
 
 Simulating full human mobile app journeys with **HMAC-SHA256 Token Authentication**, **stateful keyset cursor pagination**, and **power-law influencer profile distributions** executed from the dedicated `loadgen` microVM over the datacenter network across **10 concurrent user interactions**.
 
----
+Both API microVMs run the **1 vCPU / 1 GB** tier with a single dedicated worker, measured at **1,000 virtual users, 100 ms think time, 5 s ramp + 20 s sustained**, against a **warm** database and JIT-compiled routes.
 
-### ⚔️ Round 2: The "1 vCPU / 1 GB Knife Fight" (1 Dedicated Worker)
-
-To find the true runtime efficiency ceiling and simulate budget-constrained cloud deployments, both compute microVMs were constrained to **1 vCPU / 1 GB RAM** with **1 dedicated worker process**:
+> **Run conditions matter.** These figures require a warm environment. During one measured run the database was observed taking **7,296 ms** to wake from suspended; a benchmark started against a waking database measures cold-start cost, not steady-state throughput. Always run `bun run warmup` first.
 
 | Metric | ⚡ Bun 1.4.3 + Hono | 🟢 Node.js 26.11.1 + Express | Delta / Impact |
 | :--- | :---: | :---: | :--- |
 | **MicroVM Hardware Tier** | **1 vCPU / 1 GB RAM** | **1 vCPU / 1 GB RAM** | Strict single-core constraint |
-| **Worker Concurrency** | **1 Worker (PID 1)** | **1 Worker (PID 1)** | Zero multi-core IPC context switching |
-| **Total Requests Completed** | **99,205** | **90,235** | **Node dropped ~9,000 requests** (-9.0% deficit) |
-| **Sustained Throughput** | 🏆 **4,908.6 req/sec** | **4,419.2 req/sec** | **Bun delivered +490 RPS more** |
-| **Average CPU Utilization** | 🏆 **73.7% (0.74 cores)** | 🔥 **96.2% (0.96 cores)** | **Node pinned the core near 100% saturation** |
-| **Peak CPU Utilization** | **100.0%** (bursts) | 🔥 **100.0%** (pinned) | Bun retained **26.3% idle headroom** avg |
-| **Event Loop Lag (p95)** | 🏆 **0.19 ms** | 🔥 **13.95 ms** | **Node had 73x higher event loop lag!** |
-| **Peak Memory (RSS)** | 🏆 **85 MB (8.3% of RAM)** | **178 MB (17.4% of RAM)** | **Node used 2.1x more RAM** |
-| **Median Latency (p50)** | 🏆 **81.50 ms** | **97.58 ms** | **Node was +16.08 ms slower at median** |
-| **p75 Latency** | 🏆 **95.52 ms** | **109.71 ms** | **Node broke past the 100ms fluid threshold** |
-| **p95 Latency** | 🏆 **122.77 ms** | **132.75 ms** | Sub-135ms SLA across both |
-| **Average Latency** | 🏆 **77.29 ms** | **95.25 ms** | **Node had +23.2% worse average latency** |
-| **Success Rate** | **100.0%** (0 errors) | **100.0%** (0 errors) | 0 dropped connections on both |
+| **Worker Concurrency** | **1 Worker (PID 1)** | **1 Worker (PID 1)** | No cluster IPC, no `SO_REUSEPORT` |
+| **Total Requests Completed** | **109,907** | **88,624** | **Bun completed +21,283 more** |
+| **Sustained Throughput** | 🏆 **5,451.3 req/sec** | **4,361.7 req/sec** | **Bun +25.0%** |
+| **Average CPU Utilization** | 🏆 **79.5% (0.80 cores)** | 🔥 **98.4% (0.98 cores)** | **Node pinned the single core** |
+| **Peak CPU Utilization** | **100.0%** (bursts) | **100.0%** (pinned) | Bun kept ~20% average headroom |
+| **Peak Memory (RSS)** | 🏆 **87 MB (8.5% of RAM)** | **178 MB (17.4% of RAM)** | **Bun 2.05x leaner** |
+| **Event Loop Lag (p95)** | 🏆 **2.97 ms** | 🔥 **15.59 ms** | **Node 5.2x higher** |
+| **Median Latency (p50)** | 🏆 **57.62 ms** | **101.76 ms** | **Bun −43.4%** |
+| **p75 Latency** | 🏆 **76.37 ms** | **114.31 ms** | Bun −33.2% |
+| **p95 Latency** | 🏆 **96.29 ms** | **139.26 ms** | Bun −30.9% |
+| **p99 Tail Latency** | 🏆 **123.77 ms** | **192.19 ms** | Bun −35.6% |
+| **Average Latency** | 🏆 **59.82 ms** | **98.92 ms** | Bun −39.5% |
+| **Success Rate** | **100.0%** (0 errors) | **100.0%** (0 errors) | 0 failures, 0 timeouts, 0 resets |
 
----
+**The headline:** Node reached **98.4% average CPU — effectively saturated — and still finished 25% slower**, using 2.05x the memory and 5.2x the event-loop stall. Bun completed more work while leaving a fifth of the core idle.
 
-### 📊 Round 1: 2 vCPU / 2 GB RAM (Multi-Worker Clustered Baseline)
-
-When given 2 full vCPUs and clustered workers (`node:cluster`), both runtimes completed ~100k requests without errors, but with vastly different compute overhead:
-
-| Metric | ⚡ Bun 1.4.3 + Hono | 🟢 Node.js 26.11.1 + Express | Analysis |
-| :--- | :---: | :---: | :--- |
-| **Total Requests Completed** | **99,603** | **101,202** | Both completed ~100k requests in 20.2s |
-| **Sustained Throughput** | **4,929.8 req/sec** | **5,018.3 req/sec** | ~5,000 RPS direct against PostgreSQL 16 |
-| **Success Rate** | **100.0%** (0 errors) | **100.0%** (0 errors) | 100% reliability under 1,000 VUs |
-| **Median Latency (p50)** | **78.02 ms** | **79.69 ms** | Sub-80ms interactive mobile response |
-| **p95 Latency** | **127.39 ms** | **113.82 ms** | Consistent sub-130ms response |
-| **p99 Tail Latency** | **234.73 ms** | **164.63 ms** | Postgres 16 tail queries |
-| **Average CPU Utilization** | 🏆 **26.1% (0.52 cores)** | **72.8% (1.46 cores)** | **Bun is 2.79x more CPU-efficient** |
-| **Peak CPU Utilization** | 🏆 **61.3%** | **100.0%** | **Bun preserved 74% CPU headroom** |
-| **Peak Memory Footprint (RSS)**| 🏆 **79 MB (3.9% of RAM)** | **165 MB (8.1% of RAM)** | **Bun uses 52% less memory (2.08x leaner)** |
-| **Event Loop Lag (p95)** | 🏆 **0.30 ms** | **2.89 ms** | **Bun had 9.6x lower event-loop lag** |
+> **Statistical note.** Node was measured twice; it produced 4,144.6 and 4,361.7 req/sec (~5% spread). Bun has a single run at this tier. The direction is consistent across every run captured, but treat the throughput delta as ~20–25% rather than an exact figure.
 
 ---
 
 ### 📈 Workload Breakdown (10 Realistic Social App Actions)
 
 | Action | Share | Total Volume | Avg Latency (Bun) | Avg Latency (Node) | Success Rate |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Home Timeline Scroll** (Follower Graph Join) | **40%** | ~39,000 | 77.21 ms | 94.45 ms | 100% (200 OK) |
-| **Explore Discovery** (Popularity Sort) | **20%** | ~19,500 | 76.61 ms | 94.36 ms | 100% (200 OK) |
-| **Stories Tray Fetch** (24h Ephemeral Filter) | **12%** | ~12,000 | 74.47 ms | 93.64 ms | 100% (200 OK) |
-| **Profile & 12-Photo Grid** (`Promise.all`) | **8%** | ~8,000 | 78.02 ms | 95.11 ms | 100% (200 OK) |
-| **Read Post Comments** (Keyset Pagination) | **5%** | ~5,000 | 74.37 ms | 93.52 ms | 100% (200 OK) |
-| **Double-Tap Likes** (Atomic CTE Write) | **5%** | ~4,900 | 78.21 ms | 95.11 ms | 100% (200 OK) |
-| **Search Discovery** (GIN Trigrams) | **4%** | ~3,900 | 83.36 ms | 96.94 ms | 100% (200 OK) |
-| **Save / Bookmark Post** (Atomic Bookmark Toggle) | **2%** | ~1,900 | 88.53 ms | 119.12 ms | 100% (200 OK) |
-| **Follow Creator** (Graph Mutation + Counters) | **2%** | ~1,900 | 83.44 ms | 108.02 ms | 100% (200 OK) |
-| **Post Comment** (Atomic CTE Write) | **2%** | ~1,900 | 76.05 ms | 95.37 ms | 100% (201 Created) |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **Home Timeline Scroll** (Follower Graph Join) | **39.9%** | 43,849 | 59.83 ms | 97.92 ms | 100% (200 OK) |
+| **Explore Discovery** (Popularity Sort) | **20.0%** | 21,997 | 58.89 ms | 98.04 ms | 100% (200 OK) |
+| **Stories Tray Fetch** (24h Ephemeral Filter) | **12.0%** | 13,232 | 58.02 ms | 97.22 ms | 100% (200 OK) |
+| **Profile & 12-Photo Grid** (`Promise.all`) | **8.0%** | 8,775 | 60.37 ms | 99.08 ms | 100% (200 OK) |
+| **Read Post Comments** (Keyset Pagination) | **5.0%** | 5,479 | 56.73 ms | 97.51 ms | 100% (200 OK) |
+| **Double-Tap Likes** (Atomic CTE Write) | **5.1%** | 5,553 | 60.57 ms | 99.13 ms | 100% (200 OK) |
+| **Search Discovery** (GIN Trigrams) | **4.0%** | 4,409 | 64.87 ms | 100.39 ms | 100% (200 OK) |
+| **Save / Bookmark Post** (Atomic Bookmark Toggle) | **2.0%** | 2,229 | 67.67 ms | 123.99 ms | 100% (200 OK) |
+| **Follow Creator** (Graph Mutation + Counters) | **2.0%** | 2,201 | 64.84 ms | 111.29 ms | 100% (200 OK) |
+| **Post Comment** (Atomic CTE Write) | **2.0%** | 2,183 | 60.18 ms | 99.19 ms | 100% (201 Created) |
+
+Read paths stay near 57–61 ms on Bun; the two write-heavy toggles (`save`, `follow`) are the most expensive on both stacks, and `save` is where Node degrades hardest — **123.99 ms vs 67.67 ms**, an 83% penalty.
+
+---
+
+### 🎯 Loadgen Control — Is the Generator Itself the Bottleneck?
+
+Every run records the load generator's own condition, so a generator-bound result can never be mistaken for a server-bound one.
+
+| Run | Loop Lag avg / p95 / max | Peak RSS | Cadence Delay | Verdict |
+| :--- | :---: | :---: | :---: | :--- |
+| Bun — 1,000 VUs | 0.53 / 1.16 / 3.7 ms | 89 MB | 0 ms | ✅ healthy |
+| Bun — 2,000 VUs | 0.61 / 1.18 / 18.3 ms | 111 MB | 0 ms | ✅ healthy |
+| Node — 1,000 VUs | 0.42 / 1.04 / 2.3 ms | 94 MB | 0 ms | ✅ healthy |
+| Node — 1,000 VUs (rerun) | 0.45 / 1.04 / 2.9 ms | 97 MB | 0 ms | ✅ healthy |
+
+The generator flags itself unhealthy at **25 ms p95 loop lag**. It measured **~1 ms** — roughly **24x under the threshold** — at every load level. `Client Cadence Delay` of **0 ms** confirms all 1,000 virtual users dispatched precisely on schedule and none queued behind the harness.
+
+**PostgreSQL was sampled live during the runs and is also not the constraint:**
+
+| Metric | Observed | Available |
+| :--- | :---: | :---: |
+| Peak active connections | **24** | 100 |
+| Cache hit ratio | **99.98%** | — |
+
+The database was serving almost entirely from shared buffers and never came close to connection exhaustion.
+
+---
+
+### 📉 Harness Ceiling — Where Throughput Actually Stops
+
+Doubling the virtual users reveals the shape of the curve:
+
+| | 1,000 VUs | 2,000 VUs | Change |
+| :--- | ---: | ---: | :---: |
+| Throughput | 5,451.3 rps | 5,711.2 rps | **+4.8%** |
+| p50 latency | 57.62 ms | 217.01 ms | **+276%** |
+| API event loop lag (p95) | 2.97 ms | 0.19 ms | — |
+| API CPU (avg) | 79.5% | 80.5% | +1.0 pt |
+| DB active connections | 24 | 6 | −18 |
+
+**Double the load bought 4.8% more throughput and tripled latency.** Meanwhile the application event loop stayed responsive and database connections actually *fell*. The queue is therefore in neither the app nor the database — it sits at the **HTTP connection layer** between the generator and the microVM's edge gateway.
+
+This means the harness tops out near **5,700 req/sec** regardless of how fast the application is. **These results are an efficiency comparison, not a maximum-throughput comparison** — neither stack reached that ceiling, which is the correct regime for comparing CPU cost per request.
 
 ---
 
 ### 💡 Key Architectural Insights
 
-1. **The Single-Core Choke Point:** On 1 vCPU, Node.js 26 pins at **96.2% average CPU**, suffering **13.95 ms p95 event loop lag** and dropping throughput by **~9% (4,419 RPS)**. Bun 1.4.3 sustains **4,909 RPS** with **73.7% CPU** (26% idle headroom) and **0.19 ms event loop lag**.
-2. **2.8x Compute Efficiency:** On 2 vCPUs, Bun uses only **0.52 cores** to deliver ~5,000 RPS compared to Node's **1.46 cores**.
-3. **Memory Economy:** Across both tiers, Bun's Rust memory allocator maintains a peak RSS of **79–85 MB**, while Node's V8 engine hovers around **165–178 MB** (2.1x higher memory footprint).
-4. **Cloud Cost Translation:** Bun can comfortably run full 5,000 RPS production workloads on a budget **1 vCPU / 1 GB microVM tier** where Node requires a **2 vCPU instance** to avoid event loop choking.
+1. **Compute efficiency is the real story.** On an identical single core, Bun completed **109,907** requests to Node's **88,624** (+25% throughput) while averaging **79.5% CPU against Node's 98.4%**. Node was saturated and still slower — it converts CPU into completed requests less effectively.
+2. **Event-loop starvation compounds.** Node's **15.59 ms p95** event-loop lag against Bun's **2.97 ms** is why its latency tails worsen disproportionately. At 1,000 concurrent users even a few milliseconds of stall per event loop turns into visible queueing.
+3. **Memory economy is consistent.** Bun's Rust allocator holds peak RSS at **87 MB (8.5%)** of the 1 GB microVM; Node's V8 heap settles at **178 MB (17.4%)** — a **2.05x** difference on the same workload.
+4. **Cost translation.** Bun sustains its full measured workload on the budget **1 vCPU / 1 GB** tier while retaining headroom. Node pins that same core at 98.4%, leaving no margin for traffic growth without resizing.
+5. **Direct to PostgreSQL.** Every read and write hits managed PostgreSQL 16 with **no Redis or cache layer** — the 99.98% cache hit ratio is PostgreSQL's own shared buffers doing the work.
 
 ---
 
@@ -208,9 +239,12 @@ bun run deploy:fastify
 # View deployment and linked project status
 bunx insta status
 
-# Adjust microVM hardware limits (e.g. 1 vCPU / 1 GB Knife Fight)
+# Inspect / adjust microVM hardware limits (current tier: 1 vCPU / 1 GB)
 bunx insta compute limits api-bun-hono --cpu 1 --memory 1gb
 bunx insta compute limits api-node-express --cpu 1 --memory 1gb
+
+# Sample database saturation while a benchmark runs (read-only)
+bunx insta postgres stats db --json
 
 # View live container compute logs
 bunx insta compute logs api-bun-hono
