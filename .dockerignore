@@ -8,3 +8,5 @@ loadgen
 scripts
 *.md
 tsconfig.tsbuildinfo
+.env
+.env.*
