@@ -79,7 +79,7 @@ async function warmup() {
     })
     if (burstRes.ok) {
       const burstJson: any = await burstRes.json()
-      console.log(`   ✅ Loadgen mini-burst complete: ${burstJson.summary?.totalRequests || 0} requests executed, p50 = ${burstJson.latencies?.p50Ms || 0}ms`)
+      console.log(`   ✅ Loadgen mini-burst complete: ${burstJson.performance?.totalRequestsCompleted || 0} requests executed, p50 = ${burstJson.latencyPercentilesMs?.raw?.p50 || 0}ms`)
     } else {
       console.warn(`   ⚠️ Loadgen mini-burst returned status ${burstRes.status}`)
     }

@@ -54,23 +54,38 @@ async function run() {
     }
 
     // Initiate the run request
+    let rejectedRun = false
     fetch(url, { signal: AbortSignal.timeout(duration * 1000 + 15000) })
       .then(async (res) => {
+        if (res.status === 409) {
+          // Loadgen refuses to start while another run is active. Continuing
+          // would poll /last-result and print the in-progress run's partial
+          // numbers, which match this run's URL, VU count and duration.
+          rejectedRun = true
+          console.error(`\n❌ Loadgen is already running a test. Wait for it to finish, then retry.`)
+          return
+        }
         if (!res.ok) {
           const body = await res.text().catch(() => '')
           console.error(`\n❌ Loadgen /run returned ${res.status}: ${body.slice(0, 200)}`)
+          rejectedRun = true
           return
         }
         const json: any = await res.json().catch(() => null)
         if (isThisRun(json)) data = json
       })
-      .catch((e) => console.error(`\n❌ /run request failed: ${e.message}`))
+      .catch((e) => {
+        rejectedRun = true
+        console.error(`\n❌ /run request failed: ${e.message}`)
+      })
 
     // Poll until complete. The deadline is mandatory: the loop can only exit
     // via the break below, so without it a report that never matches (wrong
     // target, clamped VU count, loadgen never finished) spins forever.
     const pollDeadline = Date.now() + (duration + rampUpSec + 90) * 1000
     while (!data) {
+      if (rejectedRun) break
+
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(0)
       process.stdout.write(`   ⏱️ Elapsed: ${elapsed}s / ${duration}s ...\r`)
 
@@ -94,6 +109,10 @@ async function run() {
     }
 
     if (!data) {
+      if (rejectedRun) {
+        console.error(`\n❌ Benchmark did not run. Refusing to print another run's report.`)
+        process.exit(1)
+      }
       console.error(`\n❌ No fresh report for ${normalizeUrl(API_URL)} (${users} VUs) after ${duration}s.`)
       console.error(`   The loadgen keeps a single /last-result slot. A report that does not`)
       console.error(`   match this target URL and VU count was refused rather than printed,`)
