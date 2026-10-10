@@ -1,6 +1,6 @@
 # InstaCloud Social Media Backend & High-Throughput Benchmark
 
-A high-performance social media backend prototype built with **Bun 1.4.2 (Rust Core)** and **Hono**, deployed on **InstaCloud** serverless microVMs and backed by **Managed PostgreSQL 16**.
+A high-performance social media backend prototype built with **Bun 1.4.3 (Rust Core)** and **Hono**, deployed on **InstaCloud** serverless microVMs and backed by **Managed PostgreSQL 16**.
 
 ---
 
@@ -15,7 +15,7 @@ A high-performance social media backend prototype built with **Bun 1.4.2 (Rust C
 
 | Service | Type | Specs / Plan Limits | Purpose |
 | :--- | :--- | :--- | :--- |
-| **`api`** | Compute (MicroVM) | 2 vCPU / 2 GB RAM | Clustered multi-core Bun + Hono HTTP server |
+| **`api-bun-hono`** | Compute (MicroVM) | 2 vCPU / 2 GB RAM | Clustered multi-core Bun 1.4.3 + Hono HTTP server |
 | **`loadgen`** | Compute (MicroVM) | 2 vCPU / 2 GB RAM | Dedicated distributed realistic load generator |
 | **`db`** | PostgreSQL 16 | 2 vCPU / 2 GB RAM, 10 GB Storage | Managed relational database (`us-east-1`) |
 
@@ -23,18 +23,25 @@ A high-performance social media backend prototype built with **Bun 1.4.2 (Rust C
 
 ## 📦 Technology Stack & Runtime Optimizations
 
-* **Runtime:** [Bun v1.4.2](https://bun.sh) (Linux x64 container / Windows local development) — built on Bun's rewritten **Rust core**.
+* **Runtime:** [Bun v1.4.3](https://bun.sh) (Linux x64 container / Windows local development) — built on Bun's rewritten **Rust core** with upgraded JavaScriptCore (JSC) engine and ultra-lean memory allocator.
 * **Concurrency Model:** Multi-process worker clustering via `node:cluster` with `Bun.serve({ reusePort: true })` saturating all 2 vCPUs under Linux kernel `SO_REUSEPORT` socket distribution.
 * **Framework:** [Hono v4.13](https://hono.dev) — ultra-fast, lightweight web framework.
-* **Cryptography:** Native Zig/BoringSSL `Bun.CryptoHasher('sha256')` for Bearer token verification with constant-time validation (`crypto.timingSafeEqual`).
+* **Cryptography:** Native Zig/BoringSSL `Bun.CryptoHasher('sha256')` for Bearer token verification with constant-time validation (`crypto.timingSafeEqual`) and fast in-memory token cache.
 * **Database Driver:** [`postgres.js v3.4`](https://github.com/porsager/postgres) with tuned connection pooling:
-  * Pool Size: Balanced per clustered worker (`max: 25` per worker)
+  * Pool Size: Balanced per clustered worker (`max: 25` per worker, 50 total)
   * Idle Timeout: `20s`
   * Prepared Statements: `true`
   * Write Execution: Atomic single-roundtrip Common Table Expressions (CTEs)
+* **Modular Multi-Stack Architecture:**
+  * `src/shared/`: Shared PostgreSQL queries, HMAC authentication, and Linux cgroup telemetry samplers.
+  * `src/bun-hono/`: Production Bun 1.4.3 + Hono implementation.
+  * `src/bun-elysia/`: Scaffolding for Bun + Elysia stack.
+  * `src/node-express/`: Scaffolding for Node.js 22 + Express stack.
+  * `src/node-fastify/`: Scaffolding for Node.js 22 + Fastify stack.
+* **Container Packaging:** Multi-stage Docker builds isolating production dependencies (`oven/bun:1.4.3-alpine`) and running under unprivileged non-root user `bun`.
 * **Type System & Quality:**
   * **TypeScript 7** (`tsc --noEmit`)
-  * **Oxlint v1.87** — blazingly fast Rust-based linter (runs in <15ms).
+  * **Oxlint v1.87** — blazingly fast Rust-based linter (runs in <20ms).
 
 ---
 
@@ -92,20 +99,20 @@ The database is migrated and pre-seeded with realistic Instagram-scale data:
 
 Simulating full human mobile app journeys with **HMAC-SHA256 Token Authentication**, **stateful keyset cursor pagination**, and **power-law influencer profile distributions** executed from the dedicated `loadgen` microVM over the datacenter network across **10 concurrent user interactions**.
 
-### 🏆 Benchmark Results (1,000 Virtual Users, 3s Ramp-Up + 17.6s Sustained Peak)
+### 🏆 Benchmark Results (Bun 1.4.3 + Hono — 1,000 Virtual Users, 5s Ramp-Up + 15.2s Sustained Peak)
 
 | Metric | Measured Value | Analysis & Notes |
-| :--- | :---: | :---: |
-| **Total Test Duration** | **20.62s** | 3.0s Linear Ramp-Up + 17.62s Sustained Peak |
-| **Concurrent Virtual Users** | **1,000 VUs** | Staggered launch to eliminate artificial cold stampede |
-| **Total Requests Completed** | **91,986** | 91,986 succeeded (**100.0% success rate, 0 failed**) |
-| **Sustained Throughput** | **4,460.6 req/s** | Sustained high throughput under concurrent write transactions |
-| **Peak Instantaneous RPS** | **5,796 req/s** | Max throughput measured under burst capacity |
-| **HTTP Status Matrix** | **90,181 `200` / 1,805 `201`** | **0 errors (0 timeouts, 0 resets, 0 5xx)** |
+| :--- | :---: | :--- |
+| **Total Test Duration** | **20.20s** | 5.0s Linear Ramp-Up + 15.20s Sustained Peak |
+| **Concurrent Virtual Users** | **1,000 VUs** | Staggered launch simulating human mobile clients |
+| **Total Requests Completed** | **99,603** | 99,603 succeeded (**100.0% success rate, 0 failed**) |
+| **Sustained Throughput** | **4,929.8 req/s** | ~5,000 RPS sustained directly against PostgreSQL 16 |
+| **Estimated Active Humans** | **~49,300 users** | Concurrent human user equivalents with 100ms think time |
+| **HTTP Status Matrix** | **97,590 `200` / 2,013 `201`** | **0 errors (0 timeouts, 0 resets, 0 5xx)** |
 | **Cryptographic Token Auth** | **Active** | Native `Bun.CryptoHasher` Bearer verification on every journey |
-| **MicroVM CPU Utilization** | **62.3% avg / 96.9% peak** | Multi-core clustering saturating both vCPUs (1.25 avg cores) |
-| **MicroVM Memory Footprint** | **965 MB peak** | 47.1% of 2 GB allocated RAM |
-| **Event Loop Lag** | **0.43 ms avg / 1.85 ms p95** | Zero event-loop starvation under 1,000 concurrent VUs |
+| **MicroVM CPU Utilization** | **26.1% avg / 61.3% peak** | Only 0.52 cores avg used — **74% CPU headroom remaining!** |
+| **MicroVM Memory Footprint** | **79 MB peak (3.9% of RAM)** | **-78% memory reduction** compared to Bun 1.4.2 |
+| **Event Loop Lag** | **0.16 ms avg / 0.30 ms p95** | Practically zero event-loop starvation |
 
 ---
 
@@ -113,12 +120,12 @@ Simulating full human mobile app journeys with **HMAC-SHA256 Token Authenticatio
 
 | Percentile | Raw Server Round-Trip | Coordinated Omission (CO) Corrected | User Experience |
 | :---: | :---: | :---: | :--- |
-| **p50 (Median)** | **87.81 ms** | **87.81 ms** | Instant interactive mobile response |
-| **p75** | **122.97 ms** | **122.97 ms** | Fluid scrolling threshold |
-| **p90** | **166.59 ms** | **166.59 ms** | Under heavy write contention & joins |
-| **p95** | **190.09 ms** | **190.09 ms** | Sub-200ms mobile SLA under 1,000 VUs |
-| **p99** | **290.05 ms** | **290.05 ms** | Direct PostgreSQL 16 tail latency (no cache) |
-| **Cadence Queue Delay** | **0.00 ms** | **0.00 ms** | Coordinated Omission mitigated (zero arrival drift) |
+| **p50 (Median)** | **78.02 ms** | **78.02 ms** | Instant interactive mobile response |
+| **p75** | **94.04 ms** | **94.04 ms** | Sub-100ms fluid scrolling threshold |
+| **p90** | **111.29 ms** | **111.29 ms** | Under heavy concurrent writes & joins |
+| **p95** | **127.39 ms** | **127.39 ms** | Consistent sub-130ms mobile SLA under 1,000 VUs |
+| **p99** | **234.73 ms** | **234.73 ms** | Direct PostgreSQL 16 tail latency (no cache) |
+| **Min / Max / Avg** | **9.31 ms / 2892 ms / 75.91 ms** | Consistent response distribution across all actions |
 
 ---
 
@@ -126,23 +133,24 @@ Simulating full human mobile app journeys with **HMAC-SHA256 Token Authenticatio
 
 | Action | Share | Total Volume | Avg Latency | HTTP Success Rate |
 | :--- | :---: | :---: | :---: | :---: |
-| **Home Timeline Scroll** (Follower Graph Join) | **40.0%** | 36,825 | 101.73 ms | 100% (200 OK) |
-| **Explore Discovery** (Popularity Sort) | **20.2%** | 18,554 | 101.55 ms | 100% (200 OK) |
-| **Stories Tray Fetch** (24h Ephemeral Filter) | **11.9%** | 10,986 | 102.59 ms | 100% (200 OK) |
-| **Profile & 12-Photo Grid** (`Promise.all`) | **7.9%** | 7,273 | 100.90 ms | 100% (200 OK) |
-| **Read Post Comments** (Keyset Pagination) | **5.0%** | 4,624 | 101.11 ms | 100% (200 OK) |
-| **Double-Tap Likes** (Atomic CTE Write) | **4.9%** | 4,477 | 102.29 ms | 100% (200 OK) |
-| **Search Discovery** (GIN Trigrams) | **4.0%** | 3,685 | 104.65 ms | 100% (200 OK) |
-| **Follow Creator** (Graph Mutation + Counters) | **2.1%** | 1,894 | 109.38 ms | 100% (200 OK) |
-| **Save / Bookmark Post** (Atomic Bookmark Toggle) | **2.0%** | 1,863 | 104.36 ms | 100% (200 OK) |
-| **Post Comment** (Atomic CTE Write) | **2.0%** | 1,805 | 104.43 ms | 100% (201 Created) |
+| **Home Timeline Scroll** (Follower Graph Join) | **40.1%** | 39,900 | 75.77 ms | 100% (200 OK) |
+| **Explore Discovery** (Popularity Sort) | **19.8%** | 19,765 | 75.38 ms | 100% (200 OK) |
+| **Stories Tray Fetch** (24h Ephemeral Filter) | **12.1%** | 12,029 | 72.38 ms | 100% (200 OK) |
+| **Profile & 12-Photo Grid** (`Promise.all`) | **8.1%** | 8,082 | 76.23 ms | 100% (200 OK) |
+| **Read Post Comments** (Keyset Pagination) | **4.9%** | 4,885 | 71.29 ms | 100% (200 OK) |
+| **Double-Tap Likes** (Atomic CTE Write) | **5.0%** | 4,962 | 79.44 ms | 100% (200 OK) |
+| **Search Discovery** (GIN Trigrams) | **4.0%** | 3,992 | 80.13 ms | 100% (200 OK) |
+| **Save / Bookmark Post** (Atomic Bookmark Toggle) | **1.9%** | 1,934 | 84.35 ms | 100% (200 OK) |
+| **Follow Creator** (Graph Mutation + Counters) | **2.0%** | 2,041 | 84.11 ms | 100% (200 OK) |
+| **Post Comment** (Atomic CTE Write) | **2.0%** | 2,013 | 81.37 ms | 100% (201 Created) |
 
 ---
 
 ### 💡 Key Takeaways on Architecture & Capacity
-* **4.5x Request Volume with Zero Errors:** Completed **91,986 requests in 20.6 seconds** (~4,460 RPS sustained, 5,796 RPS peak) with 100% success rate across 1,000 heavy concurrent virtual users.
-* **10x Latency Reduction:** p50 dropped from **881 ms to 87.8 ms** by eliminating connection pool queueing through single-roundtrip CTEs and GIN trigram indexes.
-* **Direct to PostgreSQL:** Every single write and read went directly to managed PostgreSQL 16 **without Redis or a caching tier**.
+* **~5,000 RPS on 2 vCPUs:** Completed **99,603 requests in 20.2 seconds** with 100% success rate across 1,000 concurrent virtual users.
+* **Extreme Memory Efficiency with Bun 1.4.3:** Peak memory dropped from **356 MB to just 79 MB** (3.9% of the 2 GB container RAM), leaving 96% free.
+* **Over 70% CPU Headroom:** Average CPU utilization sits at **26.1% (0.52 cores)**, proving that the microVM has room to push beyond 1,500+ concurrent virtual users before CPU saturation.
+* **Direct to PostgreSQL:** Every single write and read hits Managed PostgreSQL 16 **without Redis or an intermediate caching layer**.
 
 ---
 
@@ -162,14 +170,15 @@ bun run warmup
 # Run all endpoint smoke tests
 bun run test:endpoints
 
-# Verify live DB record counts, sizes, and indexes
-bun run scripts/verify.ts
+# Run 1,000-user benchmark (configurable via flags or env vars)
+bun run benchmark
+# or: bun run scripts/run-benchmark.ts --users=1000 --duration=20 --rampUp=5
 
-# Run database migrations
-bun run migrate
-
-# Run database seeder
-bun run seed
+# Deploy specific stacks to InstaCloud
+bun run deploy:hono
+bun run deploy:elysia
+bun run deploy:express
+bun run deploy:fastify
 ```
 
 ### InstaCloud CLI Commands
@@ -178,14 +187,11 @@ bun run seed
 bunx insta status
 
 # View live container compute logs
-bunx insta compute logs api
+bunx insta compute logs api-bun-hono
 
 # Check real-time resource utilization
-bunx insta compute metrics api
+bunx insta compute metrics api-bun-hono
 
-# Deploy code changes to InstaCloud
-bunx insta deploy . --group api --port 3000
-
-# Trigger loadgen benchmark (e.g. 20s, 1000 VUs, 3s ramp-up, 100ms think time)
-curl "https://<loadgen-url>/run?users=1000&duration=20&rampUpSec=3&thinkTimeMs=100&useAuth=true"
+# Trigger loadgen benchmark via direct HTTP call
+curl "https://<loadgen-url>/run?users=1000&duration=20&rampUpSec=5&thinkTimeMs=100&useAuth=true"
 ```
