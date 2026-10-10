@@ -1,6 +1,10 @@
 const LOADGEN_URL = process.env.LOADGEN_URL || 'https://prod-main-loadgen-e58fbb-00gzy05gj85.compute.instacloud-edge.com'
 const API_URL = process.env.API_URL || 'https://prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com'
 
+// The loadgen strips trailing slashes from targetUrl (loadgen/index.ts) before
+// recording it, so compare normalised forms rather than raw strings.
+const normalizeUrl = (raw: any) => String(raw ?? '').trim().replace(/\/+$/, '').toLowerCase()
+
 async function run() {
   const args = process.argv.slice(2)
   const getArg = (flag: string, fallback: number) => {
@@ -9,9 +13,12 @@ async function run() {
     return fallback
   }
 
-  const users = Number(process.env.USERS) || getArg('users', 1000)
-  const rampUpSec = Number(process.env.RAMP_UP) || getArg('rampUp', 10)
-  const duration = Number(process.env.DURATION) || getArg('duration', 60)
+  // Mirror the loadgen's own clamps so the VU count we assert against is the
+  // count it will actually record. Without this, `--users=3000` is silently
+  // clamped to 2000 remotely and the guard would never match.
+  const duration = Math.min(Math.max(Number(process.env.DURATION) || getArg('duration', 60), 5), 300)
+  const users = Math.min(Math.max(Number(process.env.USERS) || getArg('users', 1000), 1), 2000)
+  const rampUpSec = Math.min(Math.max(Number(process.env.RAMP_UP) || getArg('rampUp', 10), 0), duration - 1)
   const thinkTimeMs = Number(process.env.THINK_TIME) || getArg('thinkTime', 100)
   const useAuth = true
 
@@ -39,11 +46,11 @@ async function run() {
     const runRequestedAt = Date.now()
     const isThisRun = (json: any) => {
       if (!json?.lifecycle) return false
-      if (json.lifecycle.targetUrl !== API_URL) return false
-      if (json.lifecycle.concurrentVirtualUsers !== users) return false
+      if (normalizeUrl(json.lifecycle.targetUrl) !== normalizeUrl(API_URL)) return false
+      if (Number(json.lifecycle.concurrentVirtualUsers) !== users) return false
       const stamped = Date.parse(json.timestamp)
       if (Number.isNaN(stamped) || stamped < runRequestedAt - 5000) return false
-      return json.lifecycle.totalDurationSeconds >= duration - 2
+      return Number(json.lifecycle.totalDurationSeconds) >= duration - 2
     }
 
     // Initiate the run request
@@ -59,7 +66,10 @@ async function run() {
       })
       .catch((e) => console.error(`\n❌ /run request failed: ${e.message}`))
 
-    // Poll until complete
+    // Poll until complete. The deadline is mandatory: the loop can only exit
+    // via the break below, so without it a report that never matches (wrong
+    // target, clamped VU count, loadgen never finished) spins forever.
+    const pollDeadline = Date.now() + (duration + rampUpSec + 90) * 1000
     while (!data) {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(0)
       process.stdout.write(`   ⏱️ Elapsed: ${elapsed}s / ${duration}s ...\r`)
@@ -75,12 +85,19 @@ async function run() {
           }
         }
       }
+
+      if (Date.now() > pollDeadline) {
+        console.error(`\n❌ Timed out after ${duration + rampUpSec + 90}s waiting for a fresh report.`)
+        break
+      }
       await Bun.sleep(2000)
     }
 
     if (!data) {
-      console.error(`\n❌ No fresh report for ${API_URL} (${users} VUs) after ${duration}s.`)
-      console.error(`   Refusing to print a stale /last-result from a different target or VU count.`)
+      console.error(`\n❌ No fresh report for ${normalizeUrl(API_URL)} (${users} VUs) after ${duration}s.`)
+      console.error(`   The loadgen keeps a single /last-result slot. A report that does not`)
+      console.error(`   match this target URL and VU count was refused rather than printed,`)
+      console.error(`   because it belongs to an earlier run.`)
       process.exit(1)
     }
     console.log(`\n`)
