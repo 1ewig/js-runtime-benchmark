@@ -74,7 +74,7 @@ async function warmup() {
   // --- Step 3: Warm up Loadgen MicroVM with a brief mini-burst ---
   console.log('\n3️⃣ Priming Loadgen microVM (allocator, timers, worker pool)...')
   try {
-    const burstRes = await fetch(`${LOADGEN_URL}/run?users=20&duration=4&rampUpSec=1&thinkTimeMs=50&useAuth=true`, {
+    const burstRes = await fetch(`${LOADGEN_URL}/run?users=20&duration=4&rampUpSec=1&thinkTimeMs=50&useAuth=true&targetUrl=${encodeURIComponent(API_URL)}`, {
       signal: AbortSignal.timeout(15000),
     })
     if (burstRes.ok) {

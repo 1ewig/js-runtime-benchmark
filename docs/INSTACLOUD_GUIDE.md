@@ -16,6 +16,7 @@ This document serves as the operational manual for engineers and AI agents worki
 | Service Name | Type | Specs / Plan | Purpose & Live Domain |
 | :--- | :--- | :--- | :--- |
 | **`api-bun-hono`** | Compute MicroVM | 2 vCPU / 2 GB RAM | Active reference backend API<br>`prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com` |
+| **`api-node-express`** | Compute MicroVM | 2 vCPU / 2 GB RAM | Stage 2 Node.js 26 + Express API<br>`prod-main-api-node-express-d91ff5-00q3502k1xe.compute.instacloud-edge.com` |
 | **`loadgen`** | Compute MicroVM | 2 vCPU / 2 GB RAM | Distributed realistic load generator<br>`prod-main-loadgen-e58fbb-00gzy05gj85.compute.instacloud-edge.com` |
 | **`db`** | Managed PostgreSQL 16 | 2 vCPU / 2 GB RAM, 10 GB SSD | High-concurrency relational store with GIN trigram indexes |
 
@@ -152,13 +153,16 @@ When testing any stack, follow this sequence:
 
 ---
 
-### ⏳ Stage 2: Node.js 22 LTS + Express (Next Up)
-* **Goal:** Measure the industry-standard legacy enterprise stack against modern runtimes.
-* **Architecture:**
-  * Base Image: `node:22-alpine`
-  * Framework: Express 4/5 with `express.json()`, `node:cluster` (2 workers), and disabled `etag`/`x-powered-by`.
-  * Driver: Exact same `postgres.js` pool and CTE queries from `src/shared/`.
-* **Expected Hypothesis:** Higher CPU usage (closer to 80-100% saturation) and larger memory footprint (~180-250 MB RSS) due to V8 and libuv overhead.
+### ✅ Stage 2: Node.js 26 (Latest) + Express (Completed)
+* **Runtime:** Node.js 26.11.1 (`node:current-alpine` container)
+* **Framework:** Express 5.3 with `node:cluster` (2 workers), disabled `etag` / `x-powered-by`
+* **Performance (1,000 VUs, 20s test against PostgreSQL 16):**
+  * **Throughput:** 5,018.3 req/sec (101,202 requests completed in 20.2s)
+  * **Success Rate:** 100.0% (0 errors across 10 actions)
+  * **Median Latency (p50):** 79.69 ms (p95: 113.82 ms, p99: 164.63 ms)
+  * **Average CPU:** 72.8% (1.46 cores — peak 100%)
+  * **Peak RSS RAM:** **165 MB (8.1% of 2 GB RAM)** (2.08x higher memory than Bun 1.4.3)
+  * **Event Loop Lag:** 0.46 ms avg / 2.89 ms p95 (9.6x higher event loop lag than Bun 1.4.3)
 
 ---
 
