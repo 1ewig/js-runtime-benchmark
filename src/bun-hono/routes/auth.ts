@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { signAuthToken } from '../auth'
+import { signAuthToken } from '../../shared/auth'
 
 export const authRoutes = new Hono()
 

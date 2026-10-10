@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { apiTelemetry } from '../telemetry'
+import { apiTelemetry } from '../../shared/telemetry'
 
 export const telemetryRoutes = new Hono()
 

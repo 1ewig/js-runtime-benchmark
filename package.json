@@ -2,6 +2,10 @@
   "name": "instacloud-benchmark",
   "scripts": {
     "start": "bun run src/index.ts",
+    "start:hono": "bun run src/bun-hono/index.ts",
+    "start:elysia": "bun run src/bun-elysia/index.ts",
+    "start:express": "node src/node-express/index.js",
+    "start:fastify": "node src/node-fastify/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src scripts loadgen",
     "lint:fix": "oxlint --fix src scripts loadgen",

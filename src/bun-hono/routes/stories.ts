@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
-import { sql } from '../db'
-import { verifyAuthToken } from '../auth'
+import { sql } from '../../shared/db'
+import { verifyAuthToken } from '../../shared/auth'
 
 export const storiesRoutes = new Hono()
 

@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { sql } from '../db'
+import { sql } from '../../shared/db'
 
 export const searchRoutes = new Hono()
 
