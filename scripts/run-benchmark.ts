@@ -33,14 +33,31 @@ async function run() {
   try {
     let data: any = null
 
+    // Only a report produced after we asked for this run may be accepted. The
+    // loadgen keeps one /last-result slot, so without this guard a slow or
+    // rejected /run silently reports the PREVIOUS run's numbers.
+    const runRequestedAt = Date.now()
+    const isThisRun = (json: any) => {
+      if (!json?.lifecycle) return false
+      if (json.lifecycle.targetUrl !== API_URL) return false
+      if (json.lifecycle.concurrentVirtualUsers !== users) return false
+      const stamped = Date.parse(json.timestamp)
+      if (Number.isNaN(stamped) || stamped < runRequestedAt - 5000) return false
+      return json.lifecycle.totalDurationSeconds >= duration - 2
+    }
+
     // Initiate the run request
     fetch(url, { signal: AbortSignal.timeout(duration * 1000 + 15000) })
       .then(async (res) => {
-        if (res.ok) {
-          data = await res.json().catch(() => null)
+        if (!res.ok) {
+          const body = await res.text().catch(() => '')
+          console.error(`\n❌ Loadgen /run returned ${res.status}: ${body.slice(0, 200)}`)
+          return
         }
+        const json: any = await res.json().catch(() => null)
+        if (isThisRun(json)) data = json
       })
-      .catch(() => {})
+      .catch((e) => console.error(`\n❌ /run request failed: ${e.message}`))
 
     // Poll until complete
     while (!data) {
@@ -52,13 +69,19 @@ async function run() {
         const resLast = await fetch(`${LOADGEN_URL}/last-result`).catch(() => null)
         if (resLast && resLast.ok) {
           const json: any = await resLast.json().catch(() => null)
-          if (json && json.lifecycle?.totalDurationSeconds >= duration - 2) {
+          if (isThisRun(json)) {
             data = json
             break
           }
         }
       }
       await Bun.sleep(2000)
+    }
+
+    if (!data) {
+      console.error(`\n❌ No fresh report for ${API_URL} (${users} VUs) after ${duration}s.`)
+      console.error(`   Refusing to print a stale /last-result from a different target or VU count.`)
+      process.exit(1)
     }
     console.log(`\n`)
 
@@ -93,6 +116,19 @@ async function run() {
       console.log(`   • CPU Avg / Peak:           ${data.apiServerTelemetry.cpuUtilization?.avgCpuPct}% / ${data.apiServerTelemetry.cpuUtilization?.peakCpuPct}% (${data.apiServerTelemetry.cpuUtilization?.estimatedCoresUsed} cores)`)
       console.log(`   • Memory Peak (RSS):        ${data.apiServerTelemetry.memory?.peakRssMb} MB (${data.apiServerTelemetry.memory?.ramUsedPercent}% of RAM)`)
       console.log(`   • Event Loop Lag (Avg/p95): ${data.apiServerTelemetry.serverEventLoopLagMs?.avg} ms / ${data.apiServerTelemetry.serverEventLoopLagMs?.p95} ms`)
+    }
+
+    // Control measurement: confirms the load generator was not the limiting factor.
+    if (data.loadgenTelemetry) {
+      const lt = data.loadgenTelemetry
+      console.log(`\n🎯 LOADGEN TELEMETRY (control — is the generator itself the bottleneck?):`)
+      if (lt.cpuUtilization) {
+        console.log(`   • CPU Avg / Peak:           ${lt.cpuUtilization.avgCpuPct}% / ${lt.cpuUtilization.peakCpuPct}% (of ${lt.cpuUtilization.coresConfigured} vCPU)`)
+      }
+      console.log(`   • Memory Peak (RSS):        ${lt.peakMemory?.rssMb} MB`)
+      console.log(`   • Event Loop Lag (Avg/p95): ${lt.eventLoopLagMs?.avg} ms / ${lt.eventLoopLagMs?.p95} ms / ${lt.eventLoopLagMs?.max} ms max`)
+      console.log(`   • Client Cadence Delay:     ${data.latencyPercentilesMs?.avgCadenceDelayMs} ms (0 = VUs dispatched exactly on schedule)`)
+      console.log(`   • Generator Healthy:        ${lt.healthy}${lt.warning ? ` — ${lt.warning}` : ''}`)
     }
 
     console.log(`\n📈 WORKLOAD BREAKDOWN:`)
