@@ -28,6 +28,16 @@ if (cluster.isPrimary && numWorkers > 1) {
   apiTelemetry.start()
 
   const app = new Elysia()
+    .onRequest(({ request }) => {
+      (request as any)._t0 = performance.now()
+    })
+    .onAfterHandle(({ request, set }) => {
+      const t0 = (request as any)._t0
+      if (t0) {
+        const dur = (performance.now() - t0).toFixed(2)
+        set.headers['Server-Timing'] = `origin;dur=${dur}`
+      }
+    })
 
   // Service Directory
   app.get('/', () => ({

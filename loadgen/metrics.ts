@@ -44,6 +44,7 @@ export function computePercentiles(arr: number[]): PercentileStats {
 
 export function createMetricsCollector(duration: number, startTime: number) {
   const rawLatencies: number[] = []
+  const originLatencies: number[] = []
   const coCorrectedLatencies: number[] = []
   const scheduleDelays: number[] = []
   let totalRequests = 0
@@ -89,10 +90,14 @@ export function createMetricsCollector(duration: number, startTime: number) {
     rawElapsed: number,
     scheduleDelay: number,
     status: number | null,
-    errType: string | null
+    errType: string | null,
+    originElapsed?: number | null
   ) {
     const coLatency = rawElapsed + scheduleDelay
     rawLatencies.push(rawElapsed)
+    if (originElapsed !== undefined && originElapsed !== null && originElapsed > 0) {
+      originLatencies.push(originElapsed)
+    }
     coCorrectedLatencies.push(coLatency)
     scheduleDelays.push(scheduleDelay)
 
@@ -153,6 +158,7 @@ export function createMetricsCollector(duration: number, startTime: number) {
     apiServerTelemetry?: any
   ) {
     const rawStats = computePercentiles(rawLatencies)
+    const originStats = originLatencies.length > 0 ? computePercentiles(originLatencies) : null
     const coStats = computePercentiles(coCorrectedLatencies)
     const avgScheduleDelayMs = scheduleDelays.length > 0
       ? Number((scheduleDelays.reduce((a, b) => a + b, 0) / scheduleDelays.length).toFixed(2))
@@ -209,6 +215,7 @@ export function createMetricsCollector(duration: number, startTime: number) {
       },
       latencyPercentilesMs: {
         raw: rawStats,
+        originCompute: originStats,
         coordinatedOmissionCorrected: coStats,
         avgCadenceDelayMs: avgScheduleDelayMs,
       },

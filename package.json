@@ -18,7 +18,8 @@
     "warmup": "bun run scripts/warmup.ts",
     "benchmark": "bun run scripts/run-benchmark.ts",
     "seed": "bun run scripts/seed.ts",
-    "migrate": "bun run scripts/migrate.ts"
+    "migrate": "bun run scripts/migrate.ts",
+    "db:clean": "bun run scripts/clean-benchmark-data.ts"
   },
   "dependencies": {
     "elysia": "1.4.30",

@@ -137,12 +137,19 @@ async function run() {
     console.log(`   • Estimated Active Humans:  ~${data.performance?.estimatedActiveConcurrentHumanCapacity.toLocaleString()} concurrent users\n`)
 
     console.log(`⏱️ LATENCY PERCENTILES:`)
+    console.log(`   [End-to-End (including Edge Transit & TLS)]:`)
     console.log(`   • p50 (Median):             ${data.latencyPercentilesMs?.raw?.p50} ms  (CO Corrected: ${data.latencyPercentilesMs?.coordinatedOmissionCorrected?.p50} ms)`)
     console.log(`   • p75:                      ${data.latencyPercentilesMs?.raw?.p75} ms  (CO Corrected: ${data.latencyPercentilesMs?.coordinatedOmissionCorrected?.p75} ms)`)
     console.log(`   • p90:                      ${data.latencyPercentilesMs?.raw?.p90} ms  (CO Corrected: ${data.latencyPercentilesMs?.coordinatedOmissionCorrected?.p90} ms)`)
     console.log(`   • p95:                      ${data.latencyPercentilesMs?.raw?.p95} ms  (CO Corrected: ${data.latencyPercentilesMs?.coordinatedOmissionCorrected?.p95} ms)`)
     console.log(`   • p99:                      ${data.latencyPercentilesMs?.raw?.p99} ms  (CO Corrected: ${data.latencyPercentilesMs?.coordinatedOmissionCorrected?.p99} ms)`)
-    console.log(`   • Min / Max / Avg:          ${data.latencyPercentilesMs?.raw?.min} ms / ${data.latencyPercentilesMs?.raw?.max} ms / ${data.latencyPercentilesMs?.raw?.avg} ms\n`)
+    console.log(`   • Min / Max / Avg:          ${data.latencyPercentilesMs?.raw?.min} ms / ${data.latencyPercentilesMs?.raw?.max} ms / ${data.latencyPercentilesMs?.raw?.avg} ms`)
+    if (data.latencyPercentilesMs?.originCompute) {
+      const oc = data.latencyPercentilesMs.originCompute
+      console.log(`   [Origin MicroVM Compute Time (Server-Timing)]:`)
+      console.log(`   • p50 / p95 / p99:          ${oc.p50} ms / ${oc.p95} ms / ${oc.p99} ms (Avg: ${oc.avg} ms)`)
+    }
+    console.log('')
 
     console.log(`📋 HTTP STATUS CODES:`)
     console.log(JSON.stringify(data.statusMatrix?.httpStatusCodes, null, 2))

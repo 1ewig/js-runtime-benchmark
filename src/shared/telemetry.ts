@@ -73,11 +73,60 @@ function getProcessCpuMicros(): number {
   return u.user + u.system
 }
 
+class RingBuffer {
+  private buffer: Float64Array
+  private pointer = 0
+  private count = 0
+
+  constructor(public readonly capacity: number = 3000) {
+    this.buffer = new Float64Array(capacity)
+  }
+
+  push(val: number) {
+    this.buffer[this.pointer] = val
+    this.pointer = (this.pointer + 1) % this.capacity
+    if (this.count < this.capacity) this.count++
+  }
+
+  get length(): number {
+    return this.count
+  }
+
+  last(): number {
+    if (this.count === 0) return 0
+    const idx = (this.pointer - 1 + this.capacity) % this.capacity
+    return this.buffer[idx]
+  }
+
+  reduce(fn: (acc: number, val: number) => number, initial: number): number {
+    let acc = initial
+    for (let i = 0; i < this.count; i++) {
+      const idx = (this.pointer - this.count + i + this.capacity) % this.capacity
+      acc = fn(acc, this.buffer[idx])
+    }
+    return acc
+  }
+
+  toSorted(): number[] {
+    const res: number[] = Array.from({ length: this.count })
+    for (let i = 0; i < this.count; i++) {
+      const idx = (this.pointer - this.count + i + this.capacity) % this.capacity
+      res[i] = this.buffer[idx]
+    }
+    return res.sort((a, b) => a - b)
+  }
+
+  reset() {
+    this.pointer = 0
+    this.count = 0
+  }
+}
+
 class ApiTelemetryManager {
-  private cpuSamples: number[] = []
-  private rssSamples: number[] = []
-  private heapSamples: number[] = []
-  private lagSamples: number[] = []
+  private cpuSamples = new RingBuffer(3000)
+  private rssSamples = new RingBuffer(3000)
+  private heapSamples = new RingBuffer(3000)
+  private lagSamples = new RingBuffer(3000)
 
   private peakRss = 0
   private peakHeap = 0
@@ -134,21 +183,13 @@ class ApiTelemetryManager {
     this.heapSamples.push(heapMb)
     if (rssMb > this.peakRss) this.peakRss = rssMb
     if (heapMb > this.peakHeap) this.peakHeap = heapMb
-
-    // Keep memory bounded to last 3,000 samples (5 minutes at 100ms)
-    if (this.cpuSamples.length > 3000) {
-      this.cpuSamples.shift()
-      this.rssSamples.shift()
-      this.heapSamples.shift()
-      this.lagSamples.shift()
-    }
   }
 
   reset() {
-    this.cpuSamples = []
-    this.rssSamples = []
-    this.heapSamples = []
-    this.lagSamples = []
+    this.cpuSamples.reset()
+    this.rssSamples.reset()
+    this.heapSamples.reset()
+    this.lagSamples.reset()
     this.peakRss = 0
     this.peakHeap = 0
     this.peakCpu = 0
@@ -162,16 +203,16 @@ class ApiTelemetryManager {
       ? Number((this.cpuSamples.reduce((a, b) => a + b, 0) / this.cpuSamples.length).toFixed(1))
       : 0
     const currentCpu = this.cpuSamples.length > 0
-      ? Number(this.cpuSamples[this.cpuSamples.length - 1].toFixed(1))
+      ? Number(this.cpuSamples.last().toFixed(1))
       : 0
     const avgRss = this.rssSamples.length > 0
       ? Math.round(this.rssSamples.reduce((a, b) => a + b, 0) / this.rssSamples.length)
       : 0
     const currentRss = this.rssSamples.length > 0
-      ? this.rssSamples[this.rssSamples.length - 1]
+      ? Math.round(this.rssSamples.last())
       : 0
 
-    const sortedLag = [...this.lagSamples].sort((a, b) => a - b)
+    const sortedLag = this.lagSamples.toSorted()
     const avgLag = sortedLag.length > 0
       ? Number((sortedLag.reduce((a, b) => a + b, 0) / sortedLag.length).toFixed(2))
       : 0

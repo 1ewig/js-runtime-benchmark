@@ -29,6 +29,13 @@ if (cluster.isPrimary && numWorkers > 1) {
 
   const app = new Hono()
 
+  // Origin Server-Timing measurement middleware
+  app.use('*', async (c, next) => {
+    const t0 = performance.now()
+    await next()
+    c.header('Server-Timing', `origin;dur=${(performance.now() - t0).toFixed(2)}`)
+  })
+
   // Service Directory
   app.get('/', (c) => {
     return c.json({

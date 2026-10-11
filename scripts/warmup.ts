@@ -1,4 +1,5 @@
 import { signAuthToken } from '../src/auth'
+import { cleanBenchmarkData } from './clean-benchmark-data'
 
 const API_URL = process.env.API_URL || 'https://prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com'
 const LOADGEN_URL = process.env.LOADGEN_URL || 'https://prod-main-loadgen-e58fbb-00gzy05gj85.compute.instacloud-edge.com'
@@ -87,12 +88,17 @@ async function warmup() {
     console.warn(`   ⚠️ Loadgen burst warm-up notice: ${err.message}`)
   }
 
-  // --- Step 4: Reset API Telemetry Baseline ---
-  console.log('\n4️⃣ Resetting API telemetry window for fresh benchmark runs...')
+  // --- Step 4: Sanitize Database Benchmark Mutations & Reset Telemetry ---
+  console.log('\n4️⃣ Sanitizing DB mutations and resetting API telemetry window...')
+  try {
+    await cleanBenchmarkData()
+  } catch (err: any) {
+    console.warn(`   ⚠️ DB cleanup notice: ${err.message}`)
+  }
   await fetch(`${API_URL}/api/telemetry/reset`, { method: 'POST' }).catch(() => {})
-  console.log('   ✅ API Telemetry baseline cleared.')
+  console.log('   ✅ API Telemetry baseline cleared and DB sanitized.')
 
-  console.log('\n✨ [Warmup] All 3 services (API, DB, Loadgen) are hot and ready for maximum throughput!\n')
+  console.log('\n✨ [Warmup] All 3 services (API, DB, Loadgen) are hot, clean, and ready for benchmark!\n')
 }
 
 warmup().catch(console.error)

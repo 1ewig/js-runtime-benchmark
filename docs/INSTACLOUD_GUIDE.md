@@ -130,13 +130,13 @@ When testing any stack, follow this sequence:
    ```bash
    bun run warmup
    ```
-   *Pings the health check, JIT compiles routes, opens DB connection pools, and resets telemetry counters.*
+   *Pings the health check, JIT compiles routes, opens DB connection pools, sanitizes database mutations (`bun run db:clean`), and resets telemetry counters.*
 3. **Run Benchmark:**
    ```bash
    bun run scripts/run-benchmark.ts --users=1000 --duration=20 --rampUp=5
    ```
 4. **Evaluate Metrics:**
-   Verify **100% HTTP success rate**, check **p50/p95 latency**, note **Peak RSS RAM**, and record **Average CPU %**.
+   Verify **100% HTTP success rate**, check **Origin Compute vs. End-to-End latency** (`Server-Timing`), inspect **Coordinated Omission corrected percentiles**, note **Peak RSS RAM**, and record **Average CPU %**.
 
 ---
 

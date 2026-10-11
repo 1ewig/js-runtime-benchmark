@@ -177,21 +177,35 @@ The database was serving almost entirely from shared buffers and never came clos
 
 ---
 
-### 📉 Harness Ceiling — Where Throughput Actually Stops
+### 📉 Closed-Loop Capacity Dynamics & Little's Law
 
-Doubling the virtual users reveals the shape of the curve:
+Doubling virtual users from 1,000 to 2,000 illustrates textbook closed-loop capacity saturation governed by **Little's Law** / the **Interactive Response Time Law** ($N = X \cdot (R + Z)$):
 
 | | 1,000 VUs | 2,000 VUs | Change |
 | :--- | ---: | ---: | :---: |
-| Throughput | 5,451.3 rps | 5,711.2 rps | **+4.8%** |
-| p50 latency | 57.62 ms | 217.01 ms | **+276%** |
+| Throughput ($X$) | 5,451.3 rps | 5,711.2 rps | **+4.8%** |
+| p50 Latency ($R$) | 57.62 ms | 217.01 ms | **+276%** |
 | API event loop lag (p95) | 2.97 ms | 0.19 ms | — |
 | API CPU (avg) | 79.5% | 80.5% | +1.0 pt |
 | DB active connections | 24 | 6 | −18 |
 
-**Double the load bought 4.8% more throughput and tripled latency.** Meanwhile the application event loop stayed responsive and database connections actually *fell*. The queue is therefore in neither the app nor the database — it sits at the **HTTP connection layer** between the generator and the microVM's edge gateway.
+Because the load generator is a **closed-loop system** (each virtual user awaits response completion before sleeping and issuing the next request), throughput is directly throttled by round-trip latency:
+$$X = \frac{N}{R + Z}$$
+When the single-core microVM approaches its service capacity ceiling ($X_{\max} \approx 5,700\text{ rps}$), additional concurrency cannot be converted into completed work; instead, requests queue in socket buffers and round-trip latency $R$ scales roughly linearly with $N$.
 
-This means the harness tops out near **5,700 req/sec** regardless of how fast the application is. **These results are an efficiency comparison, not a maximum-throughput comparison** — neither stack reached that ceiling, which is the correct regime for comparing CPU cost per request.
+### 🌐 Edge Network vs. Origin Compute Transparency (`Server-Timing`)
+
+All requests from the `loadgen` microVM to the API microVMs route across **Cloudflare's public Anycast CDN edge network** (`CF-Ray`, TLS termination). This injects $\approx 15\text{–}45\text{ ms}$ of external network and proxy transit into raw latency percentiles.
+
+To isolate application execution speed from edge network transit, all stacks emit a high-resolution origin timing header (`Server-Timing: origin;dur=<ms>`), allowing the harness to measure:
+1. **End-to-End Latency:** Full user journey including Cloudflare edge proxying and TLS termination.
+2. **Origin Compute Latency:** Pure microVM framework routing, HMAC auth, and PostgreSQL query execution.
+
+| Stack (500 VUs) | Origin Compute p50 | Origin Compute p95 | End-to-End p50 | End-to-End p95 |
+| :--- | :---: | :---: | :---: | :---: |
+| ⚡ **Bun 1.4.3 + Hono** | 🏆 **1.67 ms** | 🏆 **4.59 ms** | 🏆 **46.45 ms** | 🏆 **235.32 ms** |
+| 🟢 **Node.js 26 + Express** | **3.91 ms** (2.3x slower) | **12.19 ms** (2.7x slower) | **56.64 ms** | **235.57 ms** |
+| 🦊 **Bun 1.4.3 + Elysia** | **14.04 ms** | **46.53 ms** | **90.65 ms** | **261.54 ms** |
 
 ---
 
@@ -215,8 +229,11 @@ bun run typecheck
 # Lint with Oxlint
 bun run lint
 
-# Warm up API, Database, and Loadgen microVMs
+# Warm up API, Database, and Loadgen microVMs (includes automated DB sanitization)
 bun run warmup
+
+# Clean and sanitize database mutations (reconcile counters & prune test rows)
+bun run db:clean
 
 # Run all endpoint smoke tests
 bun run test:endpoints

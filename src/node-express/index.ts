@@ -34,6 +34,20 @@ if (cluster.isPrimary && numWorkers > 1) {
   app.disable('etag')
   app.use(express.json({ limit: '10mb' }))
 
+  // Origin Server-Timing measurement middleware
+  app.use((_req, res, next) => {
+    const t0 = performance.now()
+    const origEnd = res.end
+    res.end = function (...args: any[]) {
+      if (!res.headersSent) {
+        const dur = (performance.now() - t0).toFixed(2)
+        res.setHeader('Server-Timing', `origin;dur=${dur}`)
+      }
+      return (origEnd as any).apply(res, args)
+    }
+    next()
+  })
+
   // Service Directory
   app.get('/', (_req, res) => {
     res.json({
