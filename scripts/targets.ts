@@ -35,12 +35,23 @@ export const STACK_TARGETS: Record<string, StackTarget> = {
     label: '🟢 Node.js 26 + Express',
     url: 'https://prod-main-api-node-express-d91ff5-00q3502k1xe.compute.instacloud-edge.com',
   },
+  'node-fastify': {
+    name: 'node-fastify',
+    label: '🔵 Node.js 26 + Fastify',
+    url: 'https://prod-main-api-node-fastify-40cc97-00wsycas21e.compute.instacloud-edge.com',
+  },
+  'fastify': {
+    name: 'node-fastify',
+    label: '🔵 Node.js 26 + Fastify',
+    url: 'https://prod-main-api-node-fastify-40cc97-00wsycas21e.compute.instacloud-edge.com',
+  },
 }
 
 export const UNIQUE_STACKS: StackTarget[] = [
   STACK_TARGETS['bun-hono'],
   STACK_TARGETS['bun-elysia'],
   STACK_TARGETS['node-express'],
+  STACK_TARGETS['node-fastify'],
 ]
 
 export const DEFAULT_LOADGEN_URL =
@@ -64,12 +75,14 @@ export function resolveStackTarget(rawArgs: string[] = process.argv.slice(2)): S
     console.error(`Available stacks:`)
     console.error(`  • hono     (⚡ Bun 1.4.3 + Hono)`)
     console.error(`  • elysia   (🦊 Bun 1.4.3 + Elysia)`)
-    console.error(`  • express  (🟢 Node.js 26 + Express)\n`)
+    console.error(`  • express  (🟢 Node.js 26 + Express)`)
+    console.error(`  • fastify  (🔵 Node.js 26 + Fastify)\n`)
     console.error(`Usage:`)
     console.error(`  bun run <cmd> <stack>`)
     console.error(`  e.g. bun run test hono`)
     console.error(`       bun run warmup elysia`)
-    console.error(`       bun run benchmark express\n`)
+    console.error(`       bun run benchmark express`)
+    console.error(`       bun run benchmark fastify\n`)
     console.error(`Or run all stacks side-by-side:`)
     console.error(`  bun run benchmark:compare\n`)
     process.exit(1)

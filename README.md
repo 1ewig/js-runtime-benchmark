@@ -50,12 +50,36 @@ Tested from an independent microVM over the datacenter network with 100 ms human
 
 ---
 
+## Stage 4 Result: Node.js 26 + Fastify 5.12.5
+
+Fastify was wired to the same standard as the other three stacks: identical SQL, the shared Postgres pool and HMAC auth, the same cgroup telemetry sampler, origin timing captured at the raw `ServerResponse` layer (single `writeHead` wrap) rather than a framework hook, `logger: false` (Express pays no logging cost, and Fastify's Pino would have logged and serialized every request), no response schemas so serialization stays on native `JSON.stringify`, and the same `UV_THREADPOOL_SIZE=2` / `--max-old-space-size=768` container envelope on an identical 1 vCPU / 1 GB microVM.
+
+| Metric | 🔵 Node.js 26 + Fastify 5.12.5 | 🟢 Node.js 26 + Express (sustained, published) |
+| :--- | :---: | :---: |
+| **Sustained Throughput** | **2,277.9 req/s** (median of 3: 2,271.7 / 2,373.8 / 2,277.9) | **3,293.1 req/s** |
+| **Total Completed Reqs** | **46,892** | **66,979** |
+| **Average CPU Utilization** | **92.1%** (peak 100%) | **95.8%** (peak 100%) |
+| **Compute Efficiency** | **24.8 req/s / %CPU** | **34.4 req/s / %CPU** |
+| **Peak Memory (RSS)** | **176 MB** (17.2% RAM) | **176.0 MB** (17.2% RAM) |
+| **Event Loop Lag (p95)** | **53.45 ms** | **21.98 ms** |
+| **Median Latency (p50)** | **285.47 ms** | **179.66 ms** |
+| **p95 Latency** | **462.86 ms** | **222.06 ms** |
+| **HTTP Success Rate** | **100%** (0 errors / 46,892) | **99.998%** (1 error / 67k) |
+
+**The headline finding is a negative one, and it is the interesting result.** Fastify's synthetic hello-world reputation is large — roughly 97k req/s versus Express's ~27k in the official framework benchmarks, a ~3.5x lead. Under this workload it **trails Express by ~31%** on throughput while running at comparable RSS, and it pins the single vCPU *harder* (92% average CPU delivering less work, p95 event-loop lag 2.4x worse).
+
+The load generator telemetry rules out client-side artifacts across all three runs (loop lag ~1 ms, cadence delay ~0.07 ms, generator healthy, zero client-side queueing), so the deficit is genuinely inside the API microVM. Consistent with the earlier Hono/Elysia finding in `docs/BENCHMARK_RESULTS.md`: **framework overhead measured on a trivial `GET /` does not predict performance on a DB-bound, single-vCPU, real-workload profile.** What actually decided throughput across all four stacks was V8/libuv event-loop behavior and how much idle headroom the runtime kept, not which router had the better synthetic score.
+
+> ⚠️ **Measurement caveat — these are cross-session numbers.** The Fastify figures were measured on a later date than the published Bun and Express figures, against a database whose contents have since been mutated by intervening benchmark runs. They are **not** a same-session leaderboard. A true apples-to-apples four-way run requires `bun run benchmark:compare` against all four stacks in one session; that has not been executed. Treat the Express-vs-Fastify gap as directional, not a precise ratio.
+
+---
+
 ## Multi-Stack Benchmark Roadmap
 
 - [x] **Stage 1:** Bun 1.4.3 + Hono (Reference Baseline)
 - [x] **Stage 2:** Node.js 26 + Express (Completed)
 - [x] **Stage 3:** Bun 1.4.3 + Elysia (Completed)
-- [ ] **Stage 4:** Node.js 26 + Fastify (Scaffolded)
+- [x] **Stage 4:** Node.js 26 + Fastify (Completed)
 - [ ] **Stage 5:** Final multi-stack leaderboard & comprehensive comparison report
 
 ---
@@ -66,12 +90,14 @@ Tested from an independent microVM over the datacenter network with 100 ms human
 # Smoke test endpoints against a specific stack
 bun run test hono
 bun run test express
+bun run test fastify
 
 # Warm up database connections and JIT routes
 bun run warmup hono
 
 # Run benchmark
 bun run benchmark hono
+bun run benchmark fastify
 
 # Run automated side-by-side comparison across all stacks
 bun run benchmark:compare

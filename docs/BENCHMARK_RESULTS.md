@@ -104,6 +104,54 @@ To ensure the test harness itself was never the bottleneck, loadgen telemetry wa
 | Bun + Elysia (AOT) | 0.50 ms / 1.06 ms | 95 MB | 0.13 ms | ✅ Healthy |
 | Bun + Hono (Tuned) | 0.48 ms / 1.03 ms | 98 MB | 0.14 ms | ✅ Healthy |
 | Node + Express | 4.73 ms / 18.97 ms | 93 MB | 4.49 ms | ✅ Healthy |
+| Node + Fastify | 0.35 ms / 1.02 ms | 94 MB | 0.07 ms | ✅ Healthy |
 
 * Loadgen loop lag remained at **~1 ms** (25x under the threshold of 25 ms), confirming zero client-side queueing.
 * PostgreSQL active connections remained below 25 (out of 100 available) with a **99.98% cache hit ratio**.
+
+---
+
+## 🔬 5. Stage 4: Node.js 26 + Fastify 5.12.5 — When Synthetic Router Benchmarks Mislead
+
+### 5.1 Test Conditions
+Identical to every other run: 1,000 closed-loop virtual users, 100 ms think time, 5s ramp-up, 20s sustained load, warm database, single dedicated worker (`WEB_CONCURRENCY=1`, PID 1) on a 1 vCPU / 1 GB microVM.
+
+### 5.2 Parity Engineering
+
+Before measuring, the Fastify stack was tuned so it could not be accused of an unleveled field. Every Express optimization was matched or exceeded:
+
+| Concern | Express stack | Fastify stack |
+| :--- | :--- | :--- |
+| Origin timing | `res.end` wrap at raw `ServerResponse` | single `res.writeHead` wrap via `serverFactory` |
+| Query parsing | `query parser: simple` | native `querystring.parse` (Fastify default) |
+| Body parsing | `express.json()` skipped on GET/HEAD/OPTIONS | Fastify natively skips on empty body |
+| JSON serialization | `res.json` → `JSON.stringify` | no response schemas → `JSON.stringify` |
+| Logging | none | `logger: false` (disables Pino per-request logging) |
+| Container envelope | `UV_THREADPOOL_SIZE=2`, `--max-old-space-size=768` | identical |
+| Keep-alive | 65000 / 66000 / 0 | identical |
+| Routing | `express.Router()` | `find-my-way` via encapsulated plugins |
+
+**One genuine asymmetry had to be resolved.** The Express `res.end` timing wrap is guarded on `!res.headersSent`, which works only because Express flushes headers lazily on `end()`. Fastify calls `safeWriteHead()` *before* `res.end()` (`fastify/lib/reply.js`), so that guard never fires and the header is silently never emitted. The fix was to wrap `res.writeHead` instead. An initial implementation wrapped **both** methods and measured 2,271.7 req/s; reducing it to a **single** `writeHead` wrap — matching Express's one interception per request — improved per-request cost (origin p50 33.14 ms → 26.06 ms) and throughput. Both wiring variants are documented here because the difference is itself evidence that hot-path instrumentation choices matter on a single vCPU.
+
+### 5.3 Results (median of 3 clean runs)
+
+| Run | Sustained Throughput | Origin p50 | Event Loop Lag p95 |
+| :--- | ---: | ---: | ---: |
+| 1 | 2,271.66 req/s | 33.14 ms | 76.74 ms |
+| 2 | 2,373.75 req/s | 26.06 ms | 65.76 ms |
+| 3 | 2,277.88 req/s | 31.00 ms | 53.45 ms |
+| **Median** | **2,277.88 req/s** | **31.00 ms** | **65.76 ms** |
+
+Final run detail: **46,892** requests, **0 errors**, p50 **285.47 ms**, p95 **462.86 ms**, p99 **494.00 ms**, RSS **176 MB** (17.2%), API CPU **92.1%** avg / 100% peak, event-loop lag **12.99 ms** avg / **53.45 ms** p95. Loadgen: loop lag 0.34 ms avg, cadence delay 0.07 ms, generator healthy.
+
+### 5.4 The Finding
+
+Fastify's published synthetic advantage over Express is large — the official framework benchmarks show roughly **97,000 req/s versus Express's ~27,000 req/s**, a ~3.5x lead on `GET /`. Under this workload that lead **completely reverses**: Fastify sustained **2,277.9 req/s against Express's 3,293.1 req/s**, roughly **31% slower**, at identical RSS, while pinning the single vCPU *harder* (92.1% average CPU delivering less work) and with **2.4x worse p95 event-loop lag** (53.45 ms vs 21.98 ms).
+
+Loadgen telemetry rules out client-side artifacts in every run (~1 ms loop lag, ~0.07 ms cadence delay, zero queueing), so the deficit lives inside the API microVM, not the harness.
+
+**Conclusion:** this is the same lesson as the Hono/Elysia "Promise tax" result in §2.1, arrived at from the opposite direction. **Framework overhead measured on a trivial `GET /` does not predict performance on a DB-bound, single-vCPU, real-workload profile.** Once the bottleneck is a real database roundtrip on one saturated core, what determines throughput is V8/libuv event-loop behavior and how much idle headroom the runtime retains — not which router won the synthetic benchmark. Fastify's `find-my-way` router is genuinely faster than Express's, and that advantage is simply invisible behind per-request serialization and event-loop costs that dominate at this concurrency and data size.
+
+### 5.5 Measurement Caveat
+
+⚠️ **These are cross-session numbers and must not be read as a same-session leaderboard.** The Fastify runs were executed on a later date than the published Bun and Express figures, against a database mutated by intervening benchmark runs. Establishing a true apples-to-apples four-way comparison requires `bun run benchmark:compare` across all four stacks in one session, which has not been run. The Express-vs-Fastify gap should be read as directional, not as a precise ratio.

@@ -17,6 +17,7 @@ This document is the operational guide for managing services, microVM lifecycles
 | :--- | :--- | :--- | :--- |
 | **`compute/api-bun-hono`** | Compute MicroVM | 1 vCPU / 1 GB RAM | Bun 1.4.3 + Hono API<br>`prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com` |
 | **`compute/api-node-express`** | Compute MicroVM | 1 vCPU / 1 GB RAM | Node.js 26 + Express API<br>`prod-main-api-node-express-d91ff5-00q3502k1xe.compute.instacloud-edge.com` |
+| **`compute/api-node-fastify`** | Compute MicroVM | 1 vCPU / 1 GB RAM | Node.js 26 + Fastify API<br>`prod-main-api-node-fastify-40cc97-00wsycas21e.compute.instacloud-edge.com` |
 | **`compute/api-bun-elysia`** | Compute MicroVM | 1 vCPU / 1 GB RAM | Bun 1.4.3 + Elysia API<br>`prod-main-api-bun-elysia-a0dd1d-00bw66fwy72.compute.instacloud-edge.com` |
 | **`compute/loadgen`** | Compute MicroVM | 2 vCPU / 2 GB RAM | Distributed realistic load generator<br>`prod-main-loadgen-e58fbb-00gzy05gj85.compute.instacloud-edge.com` |
 | **`postgres/db`** | Managed PostgreSQL 16 | 2 vCPU / 2 GB RAM, 10 GB SSD | Managed relational database (`us-east-1`) |

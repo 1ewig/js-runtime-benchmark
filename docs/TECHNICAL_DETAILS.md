@@ -11,6 +11,7 @@ This document covers the deep technical architecture, schema specifications, ful
 * **Live Service Endpoints:**
   * **Bun 1.4.3 + Hono:** `https://prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com`
   * **Node.js 26 + Express:** `https://prod-main-api-node-express-d91ff5-00q3502k1xe.compute.instacloud-edge.com`
+  * **Node.js 26 + Fastify:** `https://prod-main-api-node-fastify-40cc97-00wsycas21e.compute.instacloud-edge.com`
   * **Distributed Load Generator:** `https://prod-main-loadgen-e58fbb-00gzy05gj85.compute.instacloud-edge.com`
 
 ### Provisioned Hardware Topology
@@ -19,10 +20,24 @@ This document covers the deep technical architecture, schema specifications, ful
 | :--- | :--- | :--- | :--- |
 | **`api-bun-hono`** | Compute MicroVM | 1 vCPU / 1 GB RAM | Bun 1.4.3 + Hono (`WEB_CONCURRENCY=1`) |
 | **`api-node-express`** | Compute MicroVM | 1 vCPU / 1 GB RAM | Node.js 26.11 + Express 5 (`WEB_CONCURRENCY=1`) |
+| **`api-node-fastify`** | Compute MicroVM | 1 vCPU / 1 GB RAM | Node.js 26 + Fastify 5.12.5 (`WEB_CONCURRENCY=1`) |
 | **`loadgen`** | Compute MicroVM | 2 vCPU / 2 GB RAM | Distributed realistic load generator |
 | **`db`** | Managed PostgreSQL 16 | 2 vCPU / 2 GB RAM, 10 GB Storage | Relational store (`us-east-1`) |
 
 > **Constraint Design:** Both API microVMs are strictly pinned to **1 vCPU / 1 GB** (`VCPU_COUNT=1`, `MICROVM_RAM_MB=1024`, `WEB_CONCURRENCY=1`). The load generator and PostgreSQL instance run at 2 vCPU / 2 GB to ensure the application microVM is always the single resource bottleneck.
+
+### Fastify 5.12.5 Stack Configuration
+
+The Fastify stack is engineered to the same standard as the Express stack. Parity decisions:
+
+* **Version choice:** Fastify **5.12.5** (stable). The v6 line is still alpha and its headline change — dropping `fast-json-stringify` for native `JSON.stringify` — is already achieved here without any response schemas, so v5 delivers the v6 serialization profile with none of the pre-release risk.
+* **Router:** `find-my-way` (v9), reached through encapsulated plugins registered with a `prefix` per route group (`app.register(feedRoutes, { prefix: '/api/feed' })`), mirroring Express's `Router()` sub-apps.
+* **Origin timing via `serverFactory`:** Fastify's `onSendEnd()` calls `safeWriteHead()` *before* `res.end()` (see `fastify/lib/reply.js`), so the `Server-Timing: origin;dur=` header must be injected by wrapping `res.writeHead` — an `res.end` wrapper guarded on `!res.headersSent` never fires. Exactly **one** method wrap per request, matching the single `res.end` wrap the Express stack uses, so neither stack pays an interception the other avoids.
+* **Query parsing:** left at Fastify's default native `querystring.parse`, the equivalent of Express's `query parser: simple`.
+* **Logging:** `logger: false`. Fastify ships Pino, which logs and serialises both request and response on every hit by default; Express pays nothing, so leaving it on would be an unfair penalty.
+* **Serialization:** no `response` schemas are declared on any route, so Fastify serialises via native `JSON.stringify` — the same path used by `res.json()`, Hono's `c.json()`, and Elysia.
+* **Body parsing:** Fastify natively skips content-type parsing when a request carries no body, so GET/HEAD/OPTIONS (89% of the workload) allocate no parser or buffer — matching the Express stack's selective parsing with no extra branch on the hot path.
+* **Envelope:** identical `UV_THREADPOOL_SIZE=2`, `NODE_OPTIONS="--max-old-space-size=768"`, `keepAliveTimeout=65000`, `headersTimeout=66000`, `requestTimeout=0`.
 
 ---
 
@@ -41,7 +56,7 @@ This document covers the deep technical architecture, schema specifications, ful
   * `src/bun-hono/`: Reference Bun 1.4.3 + Hono implementation.
   * `src/bun-elysia/`: Bun 1.4.3 + Elysia implementation.
   * `src/node-express/`: Node.js 26.11 + Express 5 implementation.
-  * `src/node-fastify/`: Node.js 26 + Fastify scaffolding.
+  * `src/node-fastify/`: Node.js 26 + Fastify 5.12.5 implementation.
 * **Container Packaging:** Multi-stage Alpine container builds with unprivileged non-root users (`bun` / `node`).
 
 ---
@@ -143,16 +158,19 @@ bun run lint
 bun run warmup hono
 bun run warmup elysia
 bun run warmup express
+bun run warmup fastify
 
 # Smoke tests
 bun run test hono
 bun run test elysia
 bun run test express
+bun run test fastify
 
 # Single stack benchmark
 bun run benchmark hono
 bun run benchmark elysia
 bun run benchmark express
+bun run benchmark fastify
 
 # Automated comparison across all stacks
 bun run benchmark:compare

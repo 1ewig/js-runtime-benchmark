@@ -1,0 +1,41 @@
+# Stage 1: Build & Transpile TypeScript into clean ESM
+FROM oven/bun:1.4.3-alpine AS builder
+WORKDIR /app
+
+COPY package.json bun.lock* tsconfig.json ./
+COPY src ./src
+RUN bun build src/node-fastify/index.ts --target=node --packages=external --outfile=dist/index.mjs
+
+# Stage 2: Production dependencies installed on latest Node Alpine
+FROM node:current-alpine AS deps
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY package.json bun.lock* ./
+RUN npm install --omit=dev --ignore-scripts
+
+# Stage 3: Minimal, unprivileged runtime with latest Node.js Alpine
+FROM node:current-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV STACK=node-fastify
+ENV PORT=3000
+ENV WEB_CONCURRENCY=1
+ENV VCPU_COUNT=1
+ENV MICROVM_RAM_MB=1024
+ENV UV_THREADPOOL_SIZE=2
+ENV NODE_OPTIONS="--max-old-space-size=768"
+
+# Copy node_modules from deps stage
+COPY --chown=node:node --from=deps /app/node_modules ./node_modules
+COPY --chown=node:node package.json ./
+# Copy compiled output from builder stage
+COPY --chown=node:node --from=builder /app/dist ./dist
+
+USER node
+
+EXPOSE 3000
+
+CMD ["node", "dist/index.mjs"]
