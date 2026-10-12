@@ -26,16 +26,16 @@ This benchmark evaluates an Instagram-scale backend deployed on [InstaCloud](htt
 
 Tested from an independent microVM over the datacenter network with 100 ms human think time, 5s ramp-up, and 20s sustained load against a warm database:
 
-| Metric | ⚡ Bun 1.4.3 + Hono (Avg) | 🟢 Node.js 26 + Express (Avg) | Advantage / Delta |
-| :--- | :---: | :---: | :--- |
-| **Sustained Throughput** | 🏆 **3,839.9 req/s** | **3,433.9 req/s** | **Bun +11.8% higher throughput** |
-| **Average CPU Utilization** | 🏆 **69.9%** (~30% headroom) | 🔥 **85.7%** (high saturation) | Bun operates with +15.8% less CPU load |
-| **Compute Efficiency** | 🏆 **54.9 req/s / %CPU** | **40.1 req/s / %CPU** | **Bun 36.9% more CPU-efficient** |
-| **Peak Memory (RSS)** | 🏆 **94.5 MB** (9.2% of RAM) | **176.0 MB** (17.2% of RAM) | **Bun 1.86x leaner footprint** |
-| **Event Loop Lag (p95)** | 🏆 **2.14 ms** | 🔥 **9.66 ms** | Node stalled **4.5x longer** |
-| **Origin Compute Latency (p50)** | 🏆 **2.87 ms** | **8.08 ms** | **Bun 2.8x faster origin compute** |
-| **Median Latency (p50)** | 🏆 **106.46 ms** | **134.48 ms** | Bun 28 ms faster end-to-end |
-| **HTTP Success Rate** | **100.0%** (0 errors) | **100.0%** (0 errors) | 0 errors across 295k+ requests |
+| Metric | 🦊 Bun 1.4.3 + Elysia | ⚡ Bun 1.4.3 + Hono | 🟢 Node.js 26 + Express | Leader / Advantage |
+| :--- | :---: | :---: | :---: | :--- |
+| **Sustained Throughput** | 🏆 **3,941.5 req/s** | **3,839.9 req/s** | **3,433.9 req/s** | **Elysia leads (+14.8% over Node)** |
+| **Average CPU Utilization** | 🏆 **65.5%** (~34.5% idle) | **69.9%** (~30.1% idle) | 🔥 **85.7%** (high load) | **Elysia uses 20.2% less CPU than Node** |
+| **Compute Efficiency** | 🏆 **60.2 req/s / %CPU** | **54.9 req/s / %CPU** | **40.1 req/s / %CPU** | **Elysia 50.1% more CPU-efficient** |
+| **Peak Memory (RSS)** | 🏆 **90.0 MB** (8.8% RAM) | **94.5 MB** (9.2% RAM) | **176.0 MB** (17.2% RAM) | **Elysia 1.95x leaner than Node** |
+| **Event Loop Lag (p95)** | 🏆 **2.13 ms** | **2.14 ms** | 🔥 **9.66 ms** | **Node stalls 4.5x longer** |
+| **Origin Compute Latency (p50)** | 🏆 **2.56 ms** | **2.87 ms** | **8.08 ms** | **Elysia 3.15x faster origin compute** |
+| **Median Latency (p50)** | 🏆 **96.68 ms** | **106.46 ms** | **134.48 ms** | **Elysia is 38 ms faster end-to-end** |
+| **HTTP Success Rate** | **100.0%** (0 errors) | **100.0%** (0 errors) | **100.0%** (0 errors) | 0 errors across 455k+ requests |
 
 👉 **For the full 10-action route latency breakdown, origin `Server-Timing` metrics, and Little's Law scaling tests, see [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md).**
 
@@ -43,9 +43,9 @@ Tested from an independent microVM over the datacenter network with 100 ms human
 
 ## Key Findings
 
-1. **Compute Efficiency & Throughput:** Bun completed **3,839.9 req/s** vs. Node's **3,433.9 req/s** (+11.8% throughput) while using **15.8% less CPU** (69.9% vs. 85.7%). In throughput per core capacity, Bun delivers **54.9 req/s per 1% CPU** versus Node's **40.1 req/s per 1% CPU** (+36.9% efficiency advantage).
-2. **Origin Compute & Event Loop Stall:** On pure origin microVM execution (`Server-Timing`), Bun is **2.8x faster at p50 (2.87 ms vs. 8.08 ms)**. Node experienced **9.66 ms p95 event loop stall** under load, 4.5x higher than Bun's **2.14 ms p95**.
-3. **Memory Economy:** Bun's Rust jemalloc allocator stabilized at **94.5 MB peak RSS** (9.2% of the 1 GB microVM) versus Node's **176 MB** (17.2%), cutting the RAM footprint nearly in half on identical workloads.
+1. **Elysia Takes the Lead:** Bun + Elysia achieved the highest sustained throughput (**3,941.5 req/s**) while maintaining the lowest CPU load (**65.5%**) and leanest memory footprint (**90.0 MB RSS**). Its static schema compilation and JIT routing produce an origin compute latency of just **2.56 ms p50**.
+2. **Compute Efficiency Leaderboard:** In completed throughput per 1% CPU utilization, **Elysia achieves 60.2 req/s / %CPU** (+50.1% over Node's 40.1), while **Hono achieves 54.9 req/s / %CPU** (+36.9% over Node).
+3. **Operational Headroom & Tails:** Both Bun stacks operate with **30%–35% idle headroom** on a single core at 1,000 VUs, with sub-2.2 ms p95 event loop lag. Node pushes the core to 85.7% average (peaking at 100%) with 9.66 ms p95 event loop stall.
 
 ---
 
@@ -53,9 +53,9 @@ Tested from an independent microVM over the datacenter network with 100 ms human
 
 - [x] **Stage 1:** Bun 1.4.3 + Hono (Reference Baseline)
 - [x] **Stage 2:** Node.js 26 + Express (Completed)
-- [ ] **Stage 3:** Bun 1.4.3 + Elysia (Scaffolded & in progress)
+- [x] **Stage 3:** Bun 1.4.3 + Elysia (Completed)
 - [ ] **Stage 4:** Node.js 26 + Fastify (Scaffolded)
-- [ ] **Stage 5:** Final multi-stack leaderboard & comparison report
+- [ ] **Stage 5:** Final multi-stack leaderboard & comprehensive comparison report
 
 ---
 
