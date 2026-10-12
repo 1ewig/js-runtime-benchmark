@@ -207,5 +207,7 @@ export async function testAll(targetUrlOverride?: string) {
   console.log('\n🎉 ALL 14 INSTAGRAM API ENDPOINTS VERIFIED SUCCESSFULLY!')
 }
 
-testAll().catch(console.error)
+if (import.meta.main) {
+  testAll().catch(console.error)
+}
 

@@ -107,4 +107,6 @@ export async function warmup(targetUrlOverride?: string, loadgenUrlOverride?: st
   console.log('\n✨ [Warmup] All 3 services (API, DB, Loadgen) are hot, clean, and ready for benchmark!\n')
 }
 
-warmup().catch(console.error)
+if (import.meta.main) {
+  warmup().catch(console.error)
+}
