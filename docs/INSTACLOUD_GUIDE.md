@@ -83,9 +83,9 @@ bunx insta secrets bindings --service compute/api-node-express
 
 ### Deployment
 Deployments are automated through project scripts:
-```bash
-# Automated deployment of Bun + Hono stack
-bun run deploy:hono
+# Automated deployment of any stack (e.g. hono, elysia, express, fastify)
+bun run deploy hono
+bun run deploy elysia
 
 # Manual deployment of any directory to a compute group
 bunx insta deploy . --group <service-name> --port 3000
@@ -124,17 +124,18 @@ When testing any stack, follow this sequence:
 
 1. **Deploy:**
    ```bash
-   bun run deploy:<stack>
+   bun run deploy <stack>
    ```
 2. **Warm Up (Crucial):**
    ```bash
-   bun run warmup
+   bun run warmup <stack>
    ```
    *Pings the health check, JIT compiles routes, opens DB connection pools, sanitizes database mutations (`bun run db:clean`), and resets telemetry counters.*
 3. **Run Benchmark:**
    ```bash
-   bun run scripts/run-benchmark.ts --users=1000 --duration=20 --rampUp=5
+   bun run benchmark <stack> --users=1000 --duration=20 --rampUp=5
    ```
+   *Or benchmark all stacks together with `bun run benchmark:compare`.*
 4. **Evaluate Metrics:**
    Verify **100% HTTP success rate**, check **Origin Compute vs. End-to-End latency** (`Server-Timing`), inspect **Coordinated Omission corrected percentiles**, note **Peak RSS RAM**, and record **Average CPU %**.
 

@@ -229,26 +229,32 @@ bun run typecheck
 # Lint with Oxlint
 bun run lint
 
-# Warm up API, Database, and Loadgen microVMs (includes automated DB sanitization)
+# Warm up API, Database, and Loadgen microVMs (defaults to Bun Hono; accepts optional [stack])
 bun run warmup
+bun run warmup elysia
+bun run warmup express
+
+# Run endpoint verification smoke tests
+bun run test
+bun run test elysia
+bun run test express
+
+# Run 1,000-user benchmark against specific stacks
+bun run benchmark
+bun run benchmark elysia
+bun run benchmark express
+
+# Run automated side-by-side benchmark matrix across all stacks
+bun run benchmark:compare
+
+# Deploy specific stacks to InstaCloud
+bun run deploy hono
+bun run deploy elysia
+bun run deploy express
+bun run deploy fastify
 
 # Clean and sanitize database mutations (reconcile counters & prune test rows)
 bun run db:clean
-
-# Run all endpoint smoke tests
-bun run test:endpoints
-
-# Run 1,000-user benchmark against Bun Hono
-bun run benchmark
-
-# Run benchmark against Node Express stack
-API_URL="https://prod-main-api-node-express-d91ff5-00q3502k1xe.compute.instacloud-edge.com" bun run benchmark
-
-# Deploy specific stacks to InstaCloud
-bun run deploy:hono
-bun run deploy:elysia
-bun run deploy:express
-bun run deploy:fastify
 ```
 
 ### InstaCloud CLI Commands
