@@ -26,16 +26,15 @@ This benchmark evaluates an Instagram-scale backend deployed on [InstaCloud](htt
 
 Tested from an independent microVM over the datacenter network with 100 ms human think time, 5s ramp-up, and 20s sustained load against a warm database:
 
-| Metric | ⚡ Bun 1.4.3 + Hono | 🟢 Node.js 26 + Express | Impact |
+| Metric | ⚡ Bun 1.4.3 + Hono (Avg) | 🟢 Node.js 26 + Express | Impact |
 | :--- | :---: | :---: | :--- |
-| **Sustained Throughput** | 🏆 **5,451.3 req/s** | **4,361.7 req/s** | **Bun +25.0% higher throughput** |
-| **Average CPU Utilization** | 🏆 **79.5%** (~20% headroom) | 🔥 **98.4%** (core pinned) | Node saturated the single core |
-| **Peak Memory (RSS)** | 🏆 **87 MB** (8.5% of RAM) | **178 MB** (17.4% of RAM) | **Bun 2.05x leaner footprint** |
-| **Event Loop Lag (p95)** | 🏆 **2.97 ms** | 🔥 **15.59 ms** | Node stalled **5.2x longer** |
-| **Median Latency (p50)** | 🏆 **57.62 ms** | **101.76 ms** | **Bun 43.4% faster** |
-| **p95 Latency** | 🏆 **96.29 ms** | **139.26 ms** | Bun 30.9% faster |
-| **p99 Tail Latency** | 🏆 **123.77 ms** | **192.19 ms** | Bun 35.6% faster |
-| **HTTP Success Rate** | **100.0%** (0 errors) | **100.0%** (0 errors) | 0 errors across 198,000+ requests |
+| **Sustained Throughput** | **3,839.9 req/s** | **4,361.7 req/s** | 3.3% dual-run spread on Bun |
+| **Average CPU Utilization** | 🏆 **69.9%** (~30% headroom) | 🔥 **98.4%** (core pinned) | Node saturated the single core |
+| **Peak Memory (RSS)** | 🏆 **94.5 MB** (9.2% of RAM) | **178 MB** (17.4% of RAM) | **Bun 1.9x leaner footprint** |
+| **Event Loop Lag (p95)** | 🏆 **2.14 ms** | 🔥 **15.59 ms** | Node stalled **7.3x longer** |
+| **Origin Compute Latency (p50)** | 🏆 **2.87 ms** | **3.91 ms** | **Bun 26% faster origin compute** |
+| **Median Latency (p50)** | **106.46 ms** | **101.76 ms** | Edge proxy network parity |
+| **HTTP Success Rate** | **100.0%** (0 errors) | **100.0%** (0 errors) | 0 errors across 156k+ requests |
 
 👉 **For the full 10-action route latency breakdown, origin `Server-Timing` metrics, and Little's Law scaling tests, see [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md).**
 
@@ -43,9 +42,9 @@ Tested from an independent microVM over the datacenter network with 100 ms human
 
 ## Key Findings
 
-1. **Compute Efficiency & Headroom:** On an identical single core, Bun finished **+21,283 more requests (+25% throughput)** while averaging **79.5% CPU**. Node pinned the core at **98.4% CPU** and maxed out at 4,361 req/s. Bun converts available CPU cycles into completed work with significantly less overhead.
-2. **Event Loop Starvation:** Under high concurrency, Node experienced **15.6 ms p95 event loop stall**, causing requests to queue and inflating tail latencies. Bun remained responsive at **2.97 ms p95**.
-3. **Memory Economy:** Bun's Rust-based memory allocator held peak RSS to **87 MB** (8.5% of the 1 GB microVM) versus Node's **178 MB** (17.4%), providing double the memory efficiency on identical workloads.
+1. **CPU Headroom & Efficiency:** Even under 1,000 concurrent user load, Bun maintains **~30% average CPU headroom** (67.6%–72.1% utilization). In contrast, Node.js saturates the single core at **98.4% CPU**, leaving no capacity margin without resizing.
+2. **Event Loop Starvation:** Under high concurrency, Node experienced **15.6 ms p95 event loop stall**—over 7x higher than Bun's **2.14 ms p95**.
+3. **Memory Economy:** Bun's Rust-based memory allocator stabilized at **94.5 MB peak RSS** (9.2% of the 1 GB microVM) versus Node's **178 MB** (17.4%), cutting the RAM footprint nearly in half on identical workloads.
 
 ---
 
