@@ -67,16 +67,19 @@ async function run() {
         }
         if (!res.ok) {
           const body = await res.text().catch(() => '')
-          console.error(`\n❌ Loadgen /run returned ${res.status}: ${body.slice(0, 200)}`)
-          rejectedRun = true
-          return
+          if (res.status === 502 || res.status === 504) {
+            console.warn(`\n⚠️ Edge proxy disconnected (${res.status}). Benchmark running on microVM; awaiting /last-result...`)
+          } else {
+            console.error(`\n❌ Loadgen /run returned ${res.status}: ${body.slice(0, 200)}`)
+            rejectedRun = true
+            return
+          }
         }
         const json: any = await res.json().catch(() => null)
         if (isThisRun(json)) data = json
       })
       .catch((e) => {
-        rejectedRun = true
-        console.error(`\n❌ /run request failed: ${e.message}`)
+        console.warn(`\n⚠️ Proxy connection closed (${e.message}). Benchmark running on microVM; awaiting /last-result...`)
       })
 
     // Poll until complete. The deadline is mandatory: the loop can only exit
