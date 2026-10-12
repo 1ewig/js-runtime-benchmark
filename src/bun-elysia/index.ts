@@ -27,7 +27,7 @@ if (cluster.isPrimary && numWorkers > 1) {
   // Worker process (or single-process if WEB_CONCURRENCY=1)
   apiTelemetry.start()
 
-  const app = new Elysia()
+  const app = new Elysia({ aot: true })
     .onRequest(({ request }) => {
       (request as any)._t0 = performance.now()
     })

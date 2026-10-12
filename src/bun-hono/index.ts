@@ -29,13 +29,6 @@ if (cluster.isPrimary && numWorkers > 1) {
 
   const app = new Hono()
 
-  // Origin Server-Timing measurement middleware
-  app.use('*', async (c, next) => {
-    const t0 = performance.now()
-    await next()
-    c.header('Server-Timing', `origin;dur=${(performance.now() - t0).toFixed(2)}`)
-  })
-
   // Service Directory
   app.get('/', (c) => {
     return c.json({
@@ -105,7 +98,12 @@ if (cluster.isPrimary && numWorkers > 1) {
     development: false,
     maxRequestBodySize: 10 * 1024 * 1024,
     idleTimeout: 30,
-    fetch: app.fetch,
+    async fetch(req, server) {
+      const t0 = performance.now()
+      const res = await app.fetch(req, server)
+      res.headers.set('Server-Timing', `origin;dur=${(performance.now() - t0).toFixed(2)}`)
+      return res
+    },
   })
 
   console.log(`⚡ [Worker ${process.pid}] Listening on http://0.0.0.0:${port} (reusePort: true)`)

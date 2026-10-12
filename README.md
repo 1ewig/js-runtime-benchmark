@@ -26,26 +26,26 @@ This benchmark evaluates an Instagram-scale backend deployed on [InstaCloud](htt
 
 Tested from an independent microVM over the datacenter network with 100 ms human think time, 5s ramp-up, and 20s sustained load against a warm database:
 
-| Metric | 🦊 Bun 1.4.3 + Elysia | ⚡ Bun 1.4.3 + Hono | 🟢 Node.js 26 + Express | Leader / Advantage |
+| Metric | 🦊 Bun 1.4.3 + Elysia (AOT) | ⚡ Bun 1.4.3 + Hono (Tuned) | 🟢 Node.js 26 + Express | Leader / Advantage |
 | :--- | :---: | :---: | :---: | :--- |
-| **Sustained Throughput** | 🏆 **3,941.5 req/s** | **3,839.9 req/s** | **3,433.9 req/s** | **Elysia leads (+14.8% over Node)** |
-| **Average CPU Utilization** | 🏆 **65.5%** (~34.5% idle) | **69.9%** (~30.1% idle) | 🔥 **85.7%** (high load) | **Elysia uses 20.2% less CPU than Node** |
-| **Compute Efficiency** | 🏆 **60.2 req/s / %CPU** | **54.9 req/s / %CPU** | **40.1 req/s / %CPU** | **Elysia 50.1% more CPU-efficient** |
-| **Peak Memory (RSS)** | 🏆 **90.0 MB** (8.8% RAM) | **94.5 MB** (9.2% RAM) | **176.0 MB** (17.2% RAM) | **Elysia 1.95x leaner than Node** |
-| **Event Loop Lag (p95)** | 🏆 **2.13 ms** | **2.14 ms** | 🔥 **9.66 ms** | **Node stalls 4.5x longer** |
-| **Origin Compute Latency (p50)** | 🏆 **2.56 ms** | **2.87 ms** | **8.08 ms** | **Elysia 3.15x faster origin compute** |
-| **Median Latency (p50)** | 🏆 **96.68 ms** | **106.46 ms** | **134.48 ms** | **Elysia is 38 ms faster end-to-end** |
+| **Sustained Throughput** | 🏆 **5,266.5 req/s** | **5,216.6 req/s** | **3,433.9 req/s** | **Elysia leads (+53.4% over Node)** |
+| **Average CPU Utilization** | 🏆 **78.2%** (~22% idle) | **79.4%** (~21% idle) | 🔥 **85.7%** (high load) | **Bun sustains +53% rps at less CPU** |
+| **Compute Efficiency** | 🏆 **67.3 req/s / %CPU** | **65.7 req/s / %CPU** | **40.1 req/s / %CPU** | **Bun +67.8% more CPU-efficient** |
+| **Peak Memory (RSS)** | **97.0 MB** (9.5% RAM) | 🏆 **92.0 MB** (9.0% RAM) | **176.0 MB** (17.2% RAM) | **Bun ~1.9x leaner than Node** |
+| **Event Loop Lag (p95)** | **3.50 ms** | 🏆 **1.85 ms** | 🔥 **9.66 ms** | **Node stalls 5.2x longer** |
+| **Median Latency (p50)** | 🏆 **66.71 ms** | **69.94 ms** | **134.48 ms** | **Bun is 2x faster end-to-end** |
+| **p95 Latency** | **102.69 ms** | 🏆 **100.93 ms** | **265.92 ms** | **Bun 2.6x lower tail latency** |
 | **HTTP Success Rate** | **100.0%** (0 errors) | **100.0%** (0 errors) | **100.0%** (0 errors) | 0 errors across 455k+ requests |
 
-👉 **For the full 10-action route latency breakdown, origin `Server-Timing` metrics, and Little's Law scaling tests, see [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md).**
+👉 **For the full 10-action route latency breakdown, origin `Server-Timing` metrics, and the middleware Promise tax discovery, see [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md).**
 
 ---
 
 ## Key Findings
 
-1. **Elysia Takes the Lead:** Bun + Elysia achieved the highest sustained throughput (**3,941.5 req/s**) while maintaining the lowest CPU load (**65.5%**) and leanest memory footprint (**90.0 MB RSS**). Its static schema compilation and JIT routing produce an origin compute latency of just **2.56 ms p50**.
-2. **Compute Efficiency Leaderboard:** In completed throughput per 1% CPU utilization, **Elysia achieves 60.2 req/s / %CPU** (+50.1% over Node's 40.1), while **Hono achieves 54.9 req/s / %CPU** (+36.9% over Node).
-3. **Operational Headroom & Tails:** Both Bun stacks operate with **30%–35% idle headroom** on a single core at 1,000 VUs, with sub-2.2 ms p95 event loop lag. Node pushes the core to 85.7% average (peaking at 100%) with 9.66 ms p95 event loop stall.
+1. **5,200+ Req/Sec Single-Core Milestone:** Both Bun runtimes broke past **5,200 requests/sec** on the single **1 vCPU / 1 GB RAM** microVM tier—completing **+36,981 more requests (+53.4%)** than Node.js with 0 errors across 100,000+ real social media operations.
+2. **The Middleware "Promise Tax" Discovery:** By eliminating Hono's `await next()` onion middleware overhead and measuring timing natively, Hono leaped **+35.8% (from 3,840 to 5,217 req/s)**, closing the gap with Elysia's JIT compiler to within **0.95%**.
+3. **Compute & Memory Efficiency:** Bun delivers **67.3 req/s per 1% CPU** (vs. Node's 40.1 req/s per 1% CPU) while holding RSS memory strictly under **97 MB** (vs. Node's 176 MB). Node pins the CPU and experiences 9.66 ms p95 event-loop stalls.
 
 ---
 
