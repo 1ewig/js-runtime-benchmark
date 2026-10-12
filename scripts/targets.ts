@@ -83,8 +83,8 @@ export function resolveStackTarget(rawArgs: string[] = process.argv.slice(2)): S
     console.error(`       bun run warmup elysia`)
     console.error(`       bun run benchmark express`)
     console.error(`       bun run benchmark fastify\n`)
-    console.error(`Or run all stacks side-by-side:`)
-    console.error(`  bun run benchmark:compare\n`)
+    console.error(`Run each stack separately so every measurement shares one session.`)
+    console.error(`  bun run warmup <stack> && bun run benchmark <stack>\n`)
     process.exit(1)
   }
 

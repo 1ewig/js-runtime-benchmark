@@ -172,8 +172,11 @@ bun run benchmark elysia
 bun run benchmark express
 bun run benchmark fastify
 
-# Automated comparison across all stacks
-bun run benchmark:compare
+# Repeat per stack to compare in a single session
+bun run benchmark hono
+bun run benchmark elysia
+bun run benchmark express
+bun run benchmark fastify
 
 # Database maintenance
 bun run db:clean

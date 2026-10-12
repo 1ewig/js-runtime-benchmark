@@ -7,7 +7,6 @@
     "test": "bun run scripts/test-endpoints.ts",
     "test:endpoints": "bun run scripts/test-endpoints.ts",
     "benchmark": "bun run scripts/run-benchmark.ts",
-    "benchmark:compare": "bun run scripts/compare-benchmark.ts",
     "typecheck": "bun check",
     "lint": "oxlint src scripts loadgen",
     "lint:fix": "oxlint --fix src scripts loadgen",

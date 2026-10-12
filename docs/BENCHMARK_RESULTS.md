@@ -153,5 +153,5 @@ While synthetic benchmarks show Fastify leading Express by ~3.5x on static `GET 
 * **libuv Saturation:** Under continuous closed-loop load on a single physical core, Fastify's reply lifecycle and hook architecture sustained **53.45 ms p95 event-loop lag** (vs. Express's 21.98 ms), throttling socket processing.
 * **The Conclusion:** Micro-benchmark throughput on trivial `GET /` does not predict behavior on single-core, I/O-bound microVMs. When single-core CPU saturates, runtime event-loop latency and idle headroom dictate real throughput.
 
-> ℹ️ *Note: Run `bun run benchmark:compare` to execute an automated, synchronized 4-way comparison across all stacks.*
+> ℹ️ *Note: Run each stack separately with `bun run benchmark <stack>` to build a same-session comparison across all four.*
 

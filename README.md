@@ -74,7 +74,7 @@ Fastify was engineered with identical parity: shared Postgres pool, HMAC auth, c
 2. **Router Speed vs. Event-Loop Scheduling:** Fastify's `find-my-way` radix router is measurably faster at route matching, but route resolution accounts for less than 1% of total request time in real database apps. Under single-core saturation, internal lifecycle queueing resulted in **53.45 ms p95 event-loop lag** (vs. 21.98 ms for Express).
 3. **The Core Finding:** Micro-benchmark throughput on trivial endpoints does not predict behavior on single-core, I/O-bound microVMs. When physical CPU saturates, runtime event-loop latency and idle headroom dictate real throughput.
 
-> ℹ️ *Note: Run `bun run benchmark:compare` to execute an automated, synchronized 4-way comparison across all stacks.*
+> ℹ️ *Note: Run each stack separately with `bun run benchmark <stack>` to build a same-session comparison across all four.*
 
 ---
 
@@ -103,6 +103,9 @@ bun run warmup hono
 bun run benchmark hono
 bun run benchmark fastify
 
-# Run automated side-by-side comparison across all stacks
-bun run benchmark:compare
+# Repeat per stack to compare in a single session
+bun run benchmark hono
+bun run benchmark elysia
+bun run benchmark express
+bun run benchmark fastify
 ```
