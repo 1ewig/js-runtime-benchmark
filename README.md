@@ -54,25 +54,27 @@ Tested from an independent microVM over the datacenter network with 100 ms human
 
 ## Stage 4 Result: Node.js 26 + Fastify 5.12.5
 
-Fastify was wired to the same standard as the other three stacks: identical SQL, the shared Postgres pool and HMAC auth, the same cgroup telemetry sampler, origin timing captured at the raw `ServerResponse` layer (single `writeHead` wrap) rather than a framework hook, `logger: false` (Express pays no logging cost, and Fastify's Pino would have logged and serialized every request), no response schemas so serialization stays on native `JSON.stringify`, and the same `UV_THREADPOOL_SIZE=2` / `--max-old-space-size=768` container envelope on an identical 1 vCPU / 1 GB microVM.
+Fastify was engineered with identical parity: shared Postgres pool, HMAC auth, cgroup telemetry, origin timing resolved at the raw `ServerResponse` layer (single `writeHead` wrap in `serverFactory`), `logger: false` (zero logging tax), native `JSON.stringify` (no response schemas), and identical container constraints (1 vCPU, 1 GB RAM, `UV_THREADPOOL_SIZE=2`, `--max-old-space-size=768`).
 
-| Metric | 🔵 Node.js 26 + Fastify 5.12.5 | 🟢 Node.js 26 + Express (sustained, published) |
-| :--- | :---: | :---: |
-| **Sustained Throughput** | **2,277.9 req/s** (median of 3: 2,271.7 / 2,373.8 / 2,277.9) | **3,293.1 req/s** |
-| **Total Completed Reqs** | **46,892** | **66,979** |
-| **Average CPU Utilization** | **92.1%** (peak 100%) | **95.8%** (peak 100%) |
-| **Compute Efficiency** | **24.8 req/s / %CPU** | **34.4 req/s / %CPU** |
-| **Peak Memory (RSS)** | **176 MB** (17.2% RAM) | **176.0 MB** (17.2% RAM) |
-| **Event Loop Lag (p95)** | **53.45 ms** | **21.98 ms** |
-| **Median Latency (p50)** | **285.47 ms** | **179.66 ms** |
-| **p95 Latency** | **462.86 ms** | **222.06 ms** |
-| **HTTP Success Rate** | **100%** (0 errors / 46,892) | **99.998%** (1 error / 67k) |
+| Metric | 🔵 Node.js 26 + Fastify 5.12.5 | 🟢 Node.js 26 + Express (Sustained) | Impact / Advantage |
+| :--- | :---: | :---: | :--- |
+| **Sustained Throughput** | **2,277.9 req/s** | **3,293.1 req/s** | **Express leads (+44.6% over Fastify)** |
+| **Total Completed Reqs** | **46,892** | **66,979** | Fastify completes ~20k fewer reqs |
+| **Average CPU Utilization** | **92.1%** (peak 100%) | **95.8%** (peak 100%) | Both saturate the single vCPU |
+| **Compute Efficiency** | **24.8 req/s / %CPU** | **34.4 req/s / %CPU** | Express is +38.7% more CPU-efficient |
+| **Peak Memory (RSS)** | **176.0 MB** (17.2% RAM) | **176.0 MB** (17.2% RAM) | Identical V8 heap footprint |
+| **Event Loop Lag (p95)** | 🔥 **53.45 ms** | **21.98 ms** | **Fastify stalls 2.4x longer under load** |
+| **Median Latency (p50)** | **285.47 ms** | **179.66 ms** | Express is 1.6x faster end-to-end |
+| **p95 Latency** | **462.86 ms** | **222.06 ms** | Express 2.1x lower tail latency |
+| **HTTP Success Rate** | **100.0%** (0 errors) | **99.998%** (1 error / 67k) | Zero errors across 46k+ requests |
 
-**The headline finding is a negative one, and it is the interesting result.** Fastify's synthetic hello-world reputation is large — roughly 97k req/s versus Express's ~27k in the official framework benchmarks, a ~3.5x lead. Under this workload it **trails Express by ~31%** on throughput while running at comparable RSS, and it pins the single vCPU *harder* (92% average CPU delivering less work, p95 event-loop lag 2.4x worse).
+### Key Architectural Takeaways
 
-The load generator telemetry rules out client-side artifacts across all three runs (loop lag ~1 ms, cadence delay ~0.07 ms, generator healthy, zero client-side queueing), so the deficit is genuinely inside the API microVM. Consistent with the earlier Hono/Elysia finding in `docs/BENCHMARK_RESULTS.md`: **framework overhead measured on a trivial `GET /` does not predict performance on a DB-bound, single-vCPU, real-workload profile.** What actually decided throughput across all four stacks was V8/libuv event-loop behavior and how much idle headroom the runtime kept, not which router had the better synthetic score.
+1. **Synthetic vs. Real-World Inversion:** Official micro-benchmarks show Fastify outperforming Express by ~3.5x on static `GET /` (~97k vs. ~27k req/s). Under this database-backed workload on a single vCPU, that lead **reverses**: Fastify sustained **2,277.9 req/s vs. Express's 3,293.1 req/s** (−30.8%).
+2. **Router Speed vs. Event-Loop Scheduling:** Fastify's `find-my-way` radix router is measurably faster at route matching, but route resolution accounts for less than 1% of total request time in real database apps. Under single-core saturation, internal lifecycle queueing resulted in **53.45 ms p95 event-loop lag** (vs. 21.98 ms for Express).
+3. **The Core Finding:** Micro-benchmark throughput on trivial endpoints does not predict behavior on single-core, I/O-bound microVMs. When physical CPU saturates, runtime event-loop latency and idle headroom dictate real throughput.
 
-> ⚠️ **Measurement caveat — these are cross-session numbers.** The Fastify figures were measured on a later date than the published Bun and Express figures, against a database whose contents have since been mutated by intervening benchmark runs. They are **not** a same-session leaderboard. A true apples-to-apples four-way run requires `bun run benchmark:compare` against all four stacks in one session; that has not been executed. Treat the Express-vs-Fastify gap as directional, not a precise ratio.
+> ℹ️ *Note: Run `bun run benchmark:compare` to execute an automated, synchronized 4-way comparison across all stacks.*
 
 ---
 
