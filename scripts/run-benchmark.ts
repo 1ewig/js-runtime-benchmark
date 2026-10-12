@@ -1,11 +1,19 @@
-const LOADGEN_URL = process.env.LOADGEN_URL || 'https://prod-main-loadgen-e58fbb-00gzy05gj85.compute.instacloud-edge.com'
-const API_URL = process.env.API_URL || 'https://prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com'
+import { resolveStackTarget, DEFAULT_LOADGEN_URL } from './targets'
 
 // The loadgen strips trailing slashes from targetUrl (loadgen/index.ts) before
 // recording it, so compare normalised forms rather than raw strings.
 const normalizeUrl = (raw: any) => String(raw ?? '').trim().replace(/\/+$/, '').toLowerCase()
 
-async function run() {
+export interface BenchmarkOptions {
+  targetUrl?: string
+  stackName?: string
+  users?: number
+  duration?: number
+  rampUp?: number
+  thinkTime?: number
+}
+
+export async function runBenchmark(opts?: BenchmarkOptions) {
   const args = process.argv.slice(2)
   const getArg = (flag: string, fallback: number) => {
     const match = args.find((a) => a.startsWith(`--${flag}=`))
@@ -13,16 +21,24 @@ async function run() {
     return fallback
   }
 
+  const target = opts?.targetUrl
+    ? { name: opts.stackName || 'custom', label: opts.stackName || 'Custom Target', url: opts.targetUrl }
+    : resolveStackTarget(args)
+
+  const LOADGEN_URL = process.env.LOADGEN_URL || DEFAULT_LOADGEN_URL
+  const API_URL = target.url
+
   // Mirror the loadgen's own clamps so the VU count we assert against is the
   // count it will actually record. Without this, `--users=3000` is silently
   // clamped to 2000 remotely and the guard would never match.
-  const duration = Math.min(Math.max(Number(process.env.DURATION) || getArg('duration', 60), 5), 300)
-  const users = Math.min(Math.max(Number(process.env.USERS) || getArg('users', 1000), 1), 2000)
-  const rampUpSec = Math.min(Math.max(Number(process.env.RAMP_UP) || getArg('rampUp', 10), 0), duration - 1)
-  const thinkTimeMs = Number(process.env.THINK_TIME) || getArg('thinkTime', 100)
+  const duration = Math.min(Math.max(opts?.duration ?? (Number(process.env.DURATION) || getArg('duration', 60)), 5), 300)
+  const users = Math.min(Math.max(opts?.users ?? (Number(process.env.USERS) || getArg('users', 1000)), 1), 2000)
+  const rampUpSec = Math.min(Math.max(opts?.rampUp ?? (Number(process.env.RAMP_UP) || getArg('rampUp', 10)), 0), duration - 1)
+  const thinkTimeMs = opts?.thinkTime ?? (Number(process.env.THINK_TIME) || getArg('thinkTime', 100))
   const useAuth = true
 
   console.log('🚀 [Benchmark] Triggering Load Generator MicroVM...')
+  console.log(`   Stack Target:     ${target.label}`)
   console.log(`   Loadgen Target:   ${LOADGEN_URL}`)
   console.log(`   API Target:       ${API_URL}`)
   console.log(`   Virtual Users:    ${users}`)
@@ -184,10 +200,16 @@ async function run() {
     }
 
     console.log('\n===============================================================\n')
+    return data
   } catch (e: any) {
     console.error('❌ Benchmark error:', e.message)
-    process.exit(1)
+    if (import.meta.main) {
+      process.exit(1)
+    }
+    throw e
   }
 }
 
-run()
+if (import.meta.main) {
+  runBenchmark()
+}

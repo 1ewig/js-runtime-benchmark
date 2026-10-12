@@ -1,11 +1,17 @@
 import { signAuthToken } from '../src/auth'
 import { cleanBenchmarkData } from './clean-benchmark-data'
+import { resolveStackTarget, DEFAULT_LOADGEN_URL } from './targets'
 
-const API_URL = process.env.API_URL || 'https://prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com'
-const LOADGEN_URL = process.env.LOADGEN_URL || 'https://prod-main-loadgen-e58fbb-00gzy05gj85.compute.instacloud-edge.com'
+export async function warmup(targetUrlOverride?: string, loadgenUrlOverride?: string) {
+  const target = targetUrlOverride
+    ? { url: targetUrlOverride, label: targetUrlOverride }
+    : resolveStackTarget()
 
-async function warmup() {
+  const API_URL = target.url
+  const LOADGEN_URL = loadgenUrlOverride || DEFAULT_LOADGEN_URL
+
   console.log('🔥 [Warmup] Initializing full 3-service warmup routine...')
+  console.log(`   Stack Target:   ${target.label}`)
   console.log(`   API Target:     ${API_URL}`)
   console.log(`   Loadgen Target: ${LOADGEN_URL}\n`)
 

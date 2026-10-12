@@ -1,9 +1,13 @@
 import { signAuthToken } from '../src/auth'
+import { resolveStackTarget } from './targets'
 
-const baseUrl = process.env.API_URL || 'https://prod-main-api-594cb0-006w55rw71q.compute.instacloud-edge.com'
+export async function testAll(targetUrlOverride?: string) {
+  const target = targetUrlOverride
+    ? { url: targetUrlOverride, label: targetUrlOverride }
+    : resolveStackTarget()
+  const baseUrl = target.url
 
-async function testAll() {
-  console.log(`🔎 Testing live Instagram API at: ${baseUrl}\n`)
+  console.log(`🔎 Testing live Instagram API (${target.label}) at: ${baseUrl}\n`)
 
   // 1. Health & DB ping
   console.log('1️⃣ GET /health')
