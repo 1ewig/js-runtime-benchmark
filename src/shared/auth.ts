@@ -1,6 +1,19 @@
 import crypto from 'node:crypto'
 
-export const AUTH_SECRET = process.env.AUTH_SECRET || 'instacloud-benchmark-secret-2026'
+const rawSecret = process.env.AUTH_SECRET
+if (!rawSecret) {
+  throw new Error(
+    'AUTH_SECRET is not set. Bind it with `insta secrets set AUTH_SECRET` ' +
+      '(or export it locally) - there is no default fallback by design.',
+  )
+}
+
+export const AUTH_SECRET = rawSecret
+
+/** Maximum age of a bearer token before verification rejects it. */
+export const TOKEN_MAX_AGE_MS = 5 * 60_000
+/** Tolerance for clocks that disagree between the signer and verifier. */
+const CLOCK_SKEW_MS = 30_000
 
 function computeHmacHex(payload: string, secret: string): string {
   if (typeof Bun !== 'undefined' && Bun.CryptoHasher) {
@@ -54,6 +67,13 @@ export function verifyAuthToken(authHeader?: string | null, secret: string = AUT
   const payload = `${userIdStr}.${timestampStr}`
   const expectedSig = computeHmacHex(payload, secret)
 
+  // Reject tokens that are too old, or dated implausibly far in the future.
+  const issuedAt = Number(timestampStr)
+  const age = Date.now() - issuedAt
+  if (age > TOKEN_MAX_AGE_MS || age < -CLOCK_SKEW_MS) {
+    return null
+  }
+
   const sigBuffer = Buffer.from(signature)
   const expectedBuffer = Buffer.from(expectedSig)
 
@@ -65,8 +85,12 @@ export function verifyAuthToken(authHeader?: string | null, secret: string = AUT
     if (verifiedTokenCache.size >= MAX_CACHE_SIZE) {
       verifiedTokenCache.clear()
     }
-    // Cache valid token for 5 minutes
-    verifiedTokenCache.set(token, { userId, expiresAt: Date.now() + 300_000 })
+    // Cache valid token, but never past the token's own expiry - a cache
+    // entry that outlives its token would keep accepting a stale credential.
+    verifiedTokenCache.set(token, {
+      userId,
+      expiresAt: Math.min(Date.now() + TOKEN_MAX_AGE_MS, issuedAt + TOKEN_MAX_AGE_MS),
+    })
     return { userId }
   }
 

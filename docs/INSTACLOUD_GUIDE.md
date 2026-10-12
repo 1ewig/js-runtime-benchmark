@@ -107,6 +107,29 @@ bunx insta secrets bind DATABASE_URL postgres/db --to compute/<service-name>
 bunx insta secrets bindings --target compute/<service-name>
 ```
 
+`AUTH_SECRET` (the HMAC key that signs bearer tokens) is a **user secret**, not a provider credential, so it uses `secrets set` rather than `secrets bind`. `src/shared/auth.ts` and `loadgen/auth.ts` throw at startup when it is missing — there is deliberately no default fallback.
+
+```bash
+# Set the signing secret project-wide so every API service and the loadgen agree
+bunx insta secrets set AUTH_SECRET
+
+# Confirm which services receive it (names only, never values)
+bunx insta secrets list
+bunx insta secrets tree
+```
+
+A project-wide `secrets set` deploys on the **linked branch only**; services on other branches keep serving the old value until their own deploy or `insta compute restart --branch <name>`.
+
+**Every API service and the load generator must share the same `AUTH_SECRET`** — the loadgen mints the tokens that the APIs verify, so a mismatch shows up as `401`s across the board rather than as a startup error.
+
+To populate a local `.env` (gitignored; regenerated wholesale, so it is the sanctioned file-based source rather than hand-editing):
+
+```bash
+bunx insta secrets -o .env
+```
+
+`bunx insta run -- <cmd>` injects the same bundle per-invocation and writes nothing to disk.
+
 ### Deploying to Compute Services
 
 ```bash
