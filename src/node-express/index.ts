@@ -1,5 +1,6 @@
 import express from 'express'
 import cluster from 'node:cluster'
+import http from 'node:http'
 import { sql } from '../shared/db'
 import { authRoutes } from './routes/auth'
 import { feedRoutes } from './routes/feed'
@@ -30,22 +31,18 @@ if (cluster.isPrimary && numWorkers > 1) {
   const app = express()
 
   // Production HTTP Optimizations
+  app.set('env', 'production')
+  app.set('query parser', 'simple')
   app.disable('x-powered-by')
   app.disable('etag')
-  app.use(express.json({ limit: '10mb' }))
 
-  // Origin Server-Timing measurement middleware
-  app.use((_req, res, next) => {
-    const t0 = performance.now()
-    const origEnd = res.end
-    res.end = function (...args: any[]) {
-      if (!res.headersSent) {
-        const dur = (performance.now() - t0).toFixed(2)
-        res.setHeader('Server-Timing', `origin;dur=${dur}`)
-      }
-      return (origEnd as any).apply(res, args)
+  // Fast body parsing: skip parsing for GET/HEAD/OPTIONS requests (89% of benchmark workload)
+  const jsonParser = express.json({ limit: '10mb' })
+  app.use((req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+      return next()
     }
-    next()
+    return jsonParser(req, res, next)
   })
 
   // Service Directory
@@ -110,10 +107,26 @@ if (cluster.isPrimary && numWorkers > 1) {
   app.use('/api/search', searchRoutes)
   app.use('/api/telemetry', telemetryRoutes)
 
-  const server = app.listen(port, '0.0.0.0', () => {
-    console.log(`⚡ [Worker ${process.pid}] Node Express listening on http://0.0.0.0:${port}`)
+  // Native HTTP Server with zero-middleware Server-Timing resolution
+  // Eliminates Express middleware allocation and Promise tax on hot request paths
+  const server = http.createServer((req, res) => {
+    const t0 = performance.now()
+    const origEnd = res.end
+    res.end = function (chunk?: any, encoding?: any, cb?: any) {
+      if (!res.headersSent) {
+        const dur = (performance.now() - t0).toFixed(2)
+        res.setHeader('Server-Timing', `origin;dur=${dur}`)
+      }
+      return origEnd.call(res, chunk, encoding, cb)
+    }
+    app(req, res)
   })
 
-  server.keepAliveTimeout = 30000
-  server.headersTimeout = 35000
+  server.keepAliveTimeout = 65000
+  server.headersTimeout = 66000
+  server.requestTimeout = 0
+
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`⚡ [Worker ${process.pid}] Node Express listening on http://0.0.0.0:${port}`)
+  })
 }
