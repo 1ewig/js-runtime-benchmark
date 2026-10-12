@@ -222,6 +222,9 @@ To isolate application execution speed from edge network transit, all stacks emi
 ## 🛠️ Developer Scripts & CLI Commands
 
 ### Routine Scripts
+
+> 💡 **Stack Agnostic:** There is no default stack. Always specify which stack you want to test (`hono`, `elysia`, `express`), or use `benchmark:compare` to evaluate all stacks side-by-side.
+
 ```bash
 # Typecheck with native Bun (runs in <250ms)
 bun run typecheck
@@ -229,25 +232,30 @@ bun run typecheck
 # Lint with Oxlint
 bun run lint
 
-# Warm up API, Database, and Loadgen microVMs (defaults to Bun Hono; accepts optional [stack])
-bun run warmup
+# Warm up API, Database, and Loadgen microVMs for a specific stack
+bun run warmup hono
 bun run warmup elysia
 bun run warmup express
 
-# Run endpoint verification smoke tests
-bun run test
+# Run endpoint verification smoke tests against a specific stack
+bun run test hono
 bun run test elysia
 bun run test express
 
-# Run 1,000-user benchmark against specific stacks
-bun run benchmark
+# Run 1,000-user benchmark against a specific stack
+bun run benchmark hono
 bun run benchmark elysia
 bun run benchmark express
 
 # Run automated side-by-side benchmark matrix across all stacks
 bun run benchmark:compare
 
-# Deploy specific stacks to InstaCloud
+# Run a stack locally
+bun run start hono
+bun run start elysia
+bun run start express
+
+# Deploy a specific stack to InstaCloud
 bun run deploy hono
 bun run deploy elysia
 bun run deploy express

@@ -2,7 +2,23 @@ import { copyFileSync, existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 
-const stack = process.argv[2] || 'bun-hono'
+const raw = process.argv[2]
+
+if (!raw) {
+  console.error(`❌ No stack specified to deploy.\n`)
+  console.error(`Please provide a stack name:`)
+  console.error(`  • hono     (Bun 1.4.3 + Hono)`)
+  console.error(`  • elysia   (Bun 1.4.3 + Elysia)`)
+  console.error(`  • express  (Node.js 26 + Express)`)
+  console.error(`  • fastify  (Node.js 26 + Fastify)\n`)
+  console.error(`Usage:`)
+  console.error(`  bun run deploy <stack>`)
+  console.error(`  e.g. bun run deploy hono`)
+  console.error(`       bun run deploy elysia\n`)
+  process.exit(1)
+}
+
+const stack = raw.toLowerCase().trim()
 
 const STACK_MAP: Record<string, { group: string; dockerfile: string }> = {
   'bun-hono': { group: 'api-bun-hono', dockerfile: 'Dockerfile.bun-hono' },

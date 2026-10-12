@@ -57,7 +57,23 @@ export function resolveStackTarget(rawArgs: string[] = process.argv.slice(2)): S
 
   const stackFlag = rawArgs.find((a) => a.startsWith('--stack='))?.split('=')[1]
   const positional = rawArgs.find((a) => !a.startsWith('-'))
-  const requested = (stackFlag || positional || process.env.STACK || 'bun-hono').toLowerCase().trim()
+  const requested = (stackFlag || positional || process.env.STACK)?.toLowerCase().trim()
+
+  if (!requested) {
+    console.error(`❌ No stack specified.\n`)
+    console.error(`Available stacks:`)
+    console.error(`  • hono     (⚡ Bun 1.4.3 + Hono)`)
+    console.error(`  • elysia   (🦊 Bun 1.4.3 + Elysia)`)
+    console.error(`  • express  (🟢 Node.js 26 + Express)\n`)
+    console.error(`Usage:`)
+    console.error(`  bun run <cmd> <stack>`)
+    console.error(`  e.g. bun run test hono`)
+    console.error(`       bun run warmup elysia`)
+    console.error(`       bun run benchmark express\n`)
+    console.error(`Or run all stacks side-by-side:`)
+    console.error(`  bun run benchmark:compare\n`)
+    process.exit(1)
+  }
 
   const target = STACK_TARGETS[requested]
   if (target) {
@@ -72,6 +88,7 @@ export function resolveStackTarget(rawArgs: string[] = process.argv.slice(2)): S
     }
   }
 
-  console.warn(`⚠️ Unknown stack "${requested}". Defaulting to "bun-hono". Available: ${Object.keys(STACK_TARGETS).join(', ')}`)
-  return STACK_TARGETS['bun-hono']
+  console.error(`❌ Unknown stack "${requested}".`)
+  console.error(`Available stacks: ${Object.keys(STACK_TARGETS).join(', ')}`)
+  process.exit(1)
 }
