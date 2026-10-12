@@ -1,5 +1,5 @@
 {
-  "name": "instacloud-benchmark",
+  "name": "js-runtime-benchmark",
   "scripts": {
     "start": "bun run src/index.ts",
     "deploy": "bun run scripts/deploy.ts",

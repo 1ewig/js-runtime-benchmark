@@ -1,6 +1,8 @@
-# InstaCloud Benchmark: Bun vs Node.js on MicroVMs
+# JS Runtime Benchmark: Bun vs Node.js on a Single-Core MicroVM
 
-An apples-to-apples real-world benchmark comparing **Bun 1.4.3 (Rust core)** and **Node.js 26 (Latest)** on single-core cloud microVMs (**1 vCPU / 1 GB RAM**) backed by **Managed PostgreSQL 16**.
+An apples-to-apples real-world benchmark comparing **Bun 1.4.3 (Rust core)** and **Node.js 26 (Latest)** on single-core cloud microVMs (**1 vCPU / 1 GB RAM**) backed by **Managed PostgreSQL 16**. The workload is an Instagram-scale social backend — the point is to measure *runtime* behaviour under real DB-bound load, not router throughput on a trivial `GET /`.
+
+Deployed on [InstaCloud](https://instacloud.com) serverless microVMs.
 
 > 📚 **Documentation Links:**
 > * 📊 [Full Benchmark Results & Workload Breakdown](docs/BENCHMARK_RESULTS.md)

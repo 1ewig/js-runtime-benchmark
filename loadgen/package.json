@@ -1,5 +1,5 @@
 {
-  "name": "instacloud-loadgen",
+  "name": "js-runtime-benchmark-loadgen",
   "version": "1.0.0",
   "scripts": {
     "start": "bun run index.ts"
